@@ -199,7 +199,7 @@ export default function Home() {
             <button key={chat.id} className={`chat-row ${activeId === chat.id ? "selected" : ""}`} onClick={() => { setActiveId(chat.id); setMobileChatOpen(true); setNotice(""); }}>
               <Avatar person={chat.other} online={chat.other.id === "demo-maya" || chat.other.id === "demo-alex" || chat.other.id === "demo-jordan"}/>
               <span className="chat-row-text"><span className="chat-row-name">{chat.other.display_name}</span><span className="chat-row-preview">{chat.lastMessage || "Say hello 👋"}</span></span>
-              <span className="chat-row-time">{chat.updated_at ? new Date(chat.updated_at).toLocaleDateString() : ""}</span>
+              <span className="chat-row-time">{(chat as any).updated_at ? new Date((chat as any).updated_at).toLocaleDateString() : ""}</span>
             </button>
           ))}
           {session && filteredChats.length === 0 && <div className="empty-list">No conversations yet.<br/>Use + to find someone by username.</div>}
@@ -242,3 +242,4 @@ export default function Home() {
 function Avatar({ person, online = false, large = false, xl = false }: { person: Profile; online?: boolean; large?: boolean; xl?: boolean }) {
   return <span className={`avatar ${large ? "avatar-large" : ""} ${xl ? "avatar-xl" : ""}`} style={{ background: person.avatar_color || "#7565ef" }}><span>{(person.display_name || person.username || "?").trim().slice(0, 1).toUpperCase()}</span>{online && <i className="avatar-online"/>}</span>;
 }
+

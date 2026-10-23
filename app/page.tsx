@@ -64,10 +64,16 @@ export default function Page() {
   const audioChunksRef = useRef<Blob[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.title = 'Chatbeep';
   }, []);
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Check auth session
   useEffect(() => {
@@ -88,7 +94,7 @@ export default function Page() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime Presence
+  // Realtime Presence Sync
   useEffect(() => {
     if (!user) return;
 
@@ -111,6 +117,59 @@ export default function Page() {
       supabase.removeChannel(room);
     };
   }, [user]);
+
+  // Fetch messages & subscribe to realtime chat for selected user
+  useEffect(() => {
+    if (!user || !selectedUser) return;
+
+    const myId = user.email || user.id;
+    const otherId = selectedUser.email;
+
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(
+          `and(sender_id.eq.${myId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${myId})`
+        )
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        setMessages(data);
+      }
+    };
+
+    fetchMessages();
+
+    // Realtime subscription for incoming messages
+    const messageChannel = supabase
+      .channel(`chat:${myId}-${otherId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          if (
+            (newMsg.sender_id === myId && newMsg.recipient_id === otherId) ||
+            (newMsg.sender_id === otherId && newMsg.recipient_id === myId)
+          ) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messageChannel);
+    };
+  }, [user, selectedUser]);
 
   // Handle Contact Search / Addition
   const handleAddContact = () => {
@@ -156,9 +215,7 @@ export default function Page() {
       created_at: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, { ...msg, id: Math.random().toString() }]);
     setNewMessage('');
-
     await supabase.from('messages').insert([msg]);
   };
 
@@ -177,9 +234,7 @@ export default function Page() {
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(filePath);
+      const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
 
       const msg = {
         sender_id: user.email || user.id,
@@ -189,7 +244,6 @@ export default function Page() {
         created_at: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, { ...msg, id: Math.random().toString() }]);
       await supabase.from('messages').insert([msg]);
     } catch (err: any) {
       console.error('Upload error:', err?.message || err);
@@ -242,9 +296,7 @@ export default function Page() {
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(filePath);
+      const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
 
       const msg = {
         sender_id: user.email || user.id,
@@ -254,7 +306,6 @@ export default function Page() {
         created_at: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, { ...msg, id: Math.random().toString() }]);
       await supabase.from('messages').insert([msg]);
     } catch (err: any) {
       console.error('Audio upload error:', err?.message || err);
@@ -569,6 +620,7 @@ export default function Page() {
                   );
                 })
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Bar with Voice Notes */}

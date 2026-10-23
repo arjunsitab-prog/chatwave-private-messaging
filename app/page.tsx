@@ -15,6 +15,7 @@ const demoPeople: Profile[] = [
   { id: "demo-ryan", username: "ryan", display_name: "Ryan Cooper", avatar_color: "#e17d9c" },
   { id: "demo-jordan", username: "jordan", display_name: "Jordan Lee", avatar_color: "#7199e8" }
 ];
+
 const demoTexts: Record<string, { body: string; mine: boolean; time: string }[]> = {
   "demo-maya": [
     { body: "Hey! How are you doing? 😊", mine: false, time: "10:32 AM" },
@@ -29,217 +30,557 @@ const demoTexts: Record<string, { body: string; mine: boolean; time: string }[]>
 };
 
 export default function Home() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const configured = Boolean(url && key && !url.includes("YOUR_PROJECT") && !key.includes("YOUR_SUPABASE"));
-  const supabase = useMemo<SupabaseClient | null>(() => configured ? createClient(url!, key!) : null, [configured, url, key]);
+  const [supabaseUrl] = useState(() => process.env.NEXT_PUBLIC_SUPABASE_URL || "");
+  const [supabaseAnonKey] = useState(() => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "");
+
+  const supabase = useMemo(() => {
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+    return createClient(supabaseUrl, supabaseAnonKey);
+  }, [supabaseUrl, supabaseAnonKey]);
 
   const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [authError, setAuthError] = useState("");
-  const [query, setQuery] = useState("");
-  const [people, setPeople] = useState<Profile[]>(demoPeople);
+  const [loadingAuth, setLoadingAuth] = useState(false);
+
   const [chats, setChats] = useState<Chat[]>([]);
-  const [activeId, setActiveId] = useState("demo-maya");
+  const [people, setPeople] = useState<Profile[]>([]);
+  const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [demoActive, setDemoActive] = useState<Profile | null>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
-  const [demoMessages, setDemoMessages] = useState<Record<string, { body: string; mine: boolean; time: string }[]>>(demoTexts);
-  const [draft, setDraft] = useState("");
-  const [newUsername, setNewUsername] = useState("");
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [notice, setNotice] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
-    return () => listener.subscription.unsubscribe();
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
   }, [supabase]);
 
-  useEffect(() => {
-    if (session && supabase) { void loadAppData(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, supabase]);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, demoMessages, activeId]);
-
-  async function loadAppData() {
+  const loadData = async () => {
     if (!supabase || !session) return;
-    const me = session.user.id;
-    const { data: profiles } = await supabase.from("profiles").select("id,username,display_name,avatar_color").neq("id", me).order("display_name");
-    setPeople((profiles || []) as Profile[]);
-    const { data: memberships } = await supabase.from("conversation_members").select("conversation_id, conversations(id, updated_at, conversation_members(user_id, profiles(id, username, display_name, avatar_color)))"); const { data: memberships } = await supabase.from("conversation_members").select("conversation_id, conversations(id, updated_at, conversation_members(user_id, profiles(id, username, display_name, avatar_color)))");.select("conversation_id, conversations(id, updated_at, (user_id, profiles(id,username,display_name,avatar_color)))");
-    const found: Chat[] = [];
-    for (const row of (memberships || []) as any[]) {
-      const convo = row.conversations;
-      if (!convo) continue;
-      const member = (convo.conversation_members || []).find((m: any) => m.user_id !== me); = (const member = (convo.members || []).find((m: any) => m.user_id !== me); || []).find((m: any) => m.user_id !== me);
-      if (!member?.profiles) continue;
-      const { data: last } = await supabase.from("messages").select("body").eq("conversation_id", convo.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      found.push({ id: convo.id, other: member.profiles, lastMessage: last?.body || "Start a conversation", updated_at: convo.updated_at });
+    setLoadingChats(true);
+    try {
+      const me = session.user.id;
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_color")
+        .neq("id", me)
+        .order("display_name");
+
+      setPeople((profiles || []) as Profile[]);
+
+      const { data: memberships } = await supabase
+        .from("conversation_members")
+        .select("conversation_id, conversations(id, updated_at, conversation_members(user_id, profiles(id, username, display_name, avatar_color)))");
+
+      const found: Chat[] = [];
+      for (const row of (memberships || []) as any[]) {
+        const convo = row.conversations;
+        if (!convo) continue;
+        const member = (convo.conversation_members || []).find((m: any) => m.user_id !== me);
+        if (!member?.profiles) continue;
+        const { data: last } = await supabase
+          .from("messages")
+          .select("body")
+          .eq("conversation_id", convo.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        found.push({
+          id: convo.id,
+          other: member.profiles,
+          lastMessage: last?.body || "Start a conversation",
+          updated_at: convo.updated_at
+        });
+      }
+      setChats(found);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingChats(false);
     }
-    const unique = Array.from(new Map(found.map(c => [c.id, c])).values());
-    setChats(unique);
-    if (unique.length && activeId.startsWith("demo-")) setActiveId(unique[0].id);
-  }
-
-  async function authenticate(e: React.FormEvent) {
-    e.preventDefault(); if (!supabase) return;
-    setAuthLoading(true); setAuthError("");
-    const result = authMode === "signup"
-      ? await supabase.auth.signUp({ email, password, options: { data: { display_name: displayName.trim() } } })
-      : await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) setAuthError(result.error.message);
-    else if (authMode === "signup" && !result.data.session) setAuthError("Check your email to confirm your account, then log in.");
-    setAuthLoading(false);
-  }
-
-  const activeChat = chats.find(c => c.id === activeId);
-  const activePerson = activeChat?.other || people.find(p => p.id === activeId) || demoPeople.find(p => p.id === activeId) || demoPeople[0];
-  const isDemo = !session || activeId.startsWith("demo-");
-  const currentMessages = isDemo
-    ? (demoMessages[activePerson.id] || []).map((m, i) => ({ id: `${activePerson.id}-${i}`, conversation_id: activePerson.id, sender_id: m.mine ? "me" : activePerson.id, body: m.body, created_at: m.time }))
-    : messages.filter(m => m.conversation_id === activeId);
-
-  const filteredPeople = people.filter(p => `${p.display_name} ${p.username}`.toLowerCase().includes(query.toLowerCase()));
-  const filteredChats = chats.filter(c => `${c.other.display_name} ${c.other.username} ${c.lastMessage || ""}`.toLowerCase().includes(query.toLowerCase()));
-  const isMine = (m: Message) => isDemo ? m.sender_id === "me" : m.sender_id === session?.user?.id;
-
-  async function openChat(person: Profile) {
-    setNotice(""); setMobileChatOpen(true);
-    if (!session || !supabase) { setActiveId(person.id); return; }
-    const existing = chats.find(c => c.other.id === person.id);
-    if (existing) { setActiveId(existing.id); await loadMessages(existing.id); return; }
-    const { data: conversationId, error } = await supabase.rpc("create_direct_conversation", { other_user_id: person.id });
-    if (error) { setNotice(error.message); return; }
-    await loadAppData();
-    setActiveId(conversationId as string);
-    await loadMessages(conversationId as string);
-  }
-
-  async function loadMessages(conversationId: string) {
-    if (!supabase) return;
-    const { data, error } = await supabase.from("messages").select("*").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(200);
-    if (!error) setMessages(prev => [...prev.filter(m => m.conversation_id !== conversationId), ...((data || []) as Message[])]);
-  }
+  };
 
   useEffect(() => {
-    if (!session || !supabase || !activeId || activeId.startsWith("demo-")) return;
-    void loadMessages(activeId);
-    const channel = supabase.channel(`conversation-${activeId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeId}` }, payload => {
-        const incoming = payload.new as Message;
-        setMessages(prev => prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming]);
-        void supabase!.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", activeId);
-      }).subscribe();
-    return () => { void supabase!.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, session?.user?.id, supabase]);
+    loadData();
+  }, [supabase, session]);
 
-  async function sendMessage(e: React.FormEvent) {
-    e.preventDefault(); const body = draft.trim(); if (!body) return;
-    if (isDemo) {
-      setDemoMessages(prev => ({ ...prev, [activePerson.id]: [...(prev[activePerson.id] || []), { body, mine: true, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }] }));
-      setDraft(""); return;
+  useEffect(() => {
+    if (!supabase || !activeChat) return;
+    setLoadingMessages(true);
+
+    supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", activeChat.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        setMessages((data || []) as Message[]);
+        setLoadingMessages(false);
+      });
+
+    const channel = supabase
+      .channel(`chat:${activeChat.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeChat.id}` },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, activeChat]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
+    setAuthError("");
+    setLoadingAuth(true);
+
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+
+        if (data.user) {
+          const { error: pErr } = await supabase.from("profiles").upsert({
+            id: data.user.id,
+            username: username || email.split("@")[0],
+            display_name: displayName || username || email.split("@")[0],
+            avatar_color: "#" + Math.floor(Math.random() * 16777215).toString(16)
+          });
+          if (pErr) console.error("Profile creation error:", pErr);
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Authentication failed");
+    } finally {
+      setLoadingAuth(false);
     }
-    if (!supabase || !activeChat) { setNotice("Choose a conversation first."); return; }
-    const { error } = await supabase.from("messages").insert({ conversation_id: activeId, body });
-    if (error) setNotice(error.message); else setDraft("");
-  }
+  };
 
-  async function startByUsername(e: React.FormEvent) {
-    e.preventDefault(); const username = newUsername.trim().replace(/^@/, "");
-    if (!username) return;
-    if (!session) {
-      const person = demoPeople.find(p => p.username.toLowerCase() === username.toLowerCase());
-      if (person) { await openChat(person); setShowNewChat(false); setNewUsername(""); }
-      else setNotice("Demo mode: try maya, alex, sarah, ryan, or jordan. Configure Supabase to find real users.");
+  const startChat = async (other: Profile) => {
+    if (!supabase || !session) return;
+
+    const me = session.user.id;
+    const existing = chats.find((c) => c.other.id === other.id);
+    if (existing) {
+      setActiveChat(existing);
+      setDemoActive(null);
       return;
     }
-    if (!supabase) return;
-    const { data: person, error } = await supabase.from("profiles").select("id,username,display_name,avatar_color").eq("username", username).maybeSingle();
-    if (error || !person) { setNotice("No user found with that username."); return; }
-    await openChat(person as Profile); setShowNewChat(false); setNewUsername("");
+
+    const { data: conv, error: convErr } = await supabase
+      .from("conversations")
+      .insert({})
+      .select("id")
+      .single();
+
+    if (convErr || !conv) {
+      console.error(convErr);
+      return;
+    }
+
+    await supabase.from("conversation_members").insert([
+      { conversation_id: conv.id, user_id: me },
+      { conversation_id: conv.id, user_id: other.id }
+    ]);
+
+    const newChat: Chat = {
+      id: conv.id,
+      other,
+      lastMessage: "Start a conversation",
+      updated_at: new Date().toISOString()
+    };
+
+    setChats((prev) => [newChat, ...prev]);
+    setActiveChat(newChat);
+    setDemoActive(null);
+  };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    if (demoActive) {
+      const msg = newMessage.trim();
+      setNewMessage("");
+      demoTexts[demoActive.id] = demoTexts[demoActive.id] || [];
+      demoTexts[demoActive.id].push({ body: msg, mine: true, time: "Just now" });
+      return;
+    }
+
+    if (!supabase || !session || !activeChat) return;
+
+    const body = newMessage.trim();
+    setNewMessage("");
+
+    const { error } = await supabase.from("messages").insert({
+      conversation_id: activeChat.id,
+      sender_id: session.user.id,
+      body
+    });
+
+    if (error) {
+      console.error("Message send error:", error);
+      return;
+    }
+
+    await supabase
+      .from("conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", activeChat.id);
+  };
+
+  const filteredPeople = people.filter(
+    (p) =>
+      p.display_name.toLowerCase().includes(search.toLowerCase()) ||
+      p.username.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredDemo = demoPeople.filter(
+    (p) =>
+      p.display_name.toLowerCase().includes(search.toLowerCase()) ||
+      p.username.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <MessageCircle className="w-8 h-8 text-indigo-500" />
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+              ChatWave
+            </h1>
+          </div>
+
+          <div className="flex rounded-lg bg-slate-950 p-1 mb-6 border border-slate-800">
+            <button
+              onClick={() => setAuthMode("login")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
+                authMode === "login" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setAuthMode("signup")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
+                authMode === "signup" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {authMode === "signup" && (
+              <>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                    placeholder="johndoe"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                    placeholder="John Doe"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Password</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {authError && <p className="text-xs text-rose-400">{authError}</p>}
+
+            <button
+              type="submit"
+              disabled={loadingAuth}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-sm transition flex items-center justify-center gap-2"
+            >
+              {loadingAuth && <LoaderCircle className="w-4 h-4 animate-spin" />}
+              {authMode === "login" ? "Sign In" : "Sign Up"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
-  async function logout() { if (supabase) await supabase.auth.signOut(); setActiveId("demo-maya"); setMobileChatOpen(false); }
-
-  if (configured && !session) return (
-    <main className="auth-screen">
-      <form className="auth-card" onSubmit={authenticate}>
-        <div className="brand-mark"><MessageCircle size={26} /></div>
-        <div className="eyebrow">PRIVATE MESSAGING</div><h1>{authMode === "login" ? "Welcome back" : "Create your account"}</h1>
-        <p className="muted">Your conversations, all in one place.</p>
-        {authMode === "signup" && <label>Display name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name" maxLength={40}/></label>}
-        <label>Email address<input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></label>
-        <label>Password<input type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters"/></label>
-        {authError && <div className="error">{authError}</div>}
-        <button className="primary full" disabled={authLoading}>{authLoading ? <LoaderCircle className="spin" size={17}/> : null}{authMode === "login" ? "Log in" : "Sign up"}</button>
-        <p className="switch-auth">{authMode === "login" ? "New to ChatWave?" : "Already have an account?"} <button type="button" className="text-button" onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>{authMode === "login" ? "Create account" : "Log in"}</button></p>
-        <p className="security-note"><LockKeyhole size={14}/> Private conversations with account-based access</p>
-      </form>
-    </main>
-  );
-
   return (
-    <main className="app-shell">
-      <aside className={`sidebar ${mobileChatOpen ? "hide-mobile" : ""}`}>
-        <div className="side-brand"><div className="brand-mark small"><MessageCircle size={21}/></div><span>chatwave</span><span className="brand-dot">.</span><span className="demo-tag">{session ? "LIVE" : "DEMO"}</span></div>
-        <div className="side-heading"><span>MESSAGES</span><button className="icon-button" onClick={() => { setShowNewChat(!showNewChat); setNotice(""); }} aria-label="New conversation"><Plus size={18}/></button></div>
-        <div className="search-box"><Search size={17}/><input placeholder="Search chats or people" value={query} onChange={e => setQuery(e.target.value)}/><kbd>⌘ K</kbd></div>
-        {showNewChat && <form className="new-chat" onSubmit={startByUsername}><label>Start a private chat</label><div className="new-chat-row"><input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="@username" autoFocus/><button className="primary" aria-label="Find user"><ArrowLeft size={16}/></button></div><small>Enter an exact username.</small></form>}
-        <div className="section-label">RECENT</div>
-        <div className="chat-list">
-          {(session ? filteredChats : demoPeople.filter(p => `${p.display_name} ${p.username}`.toLowerCase().includes(query.toLowerCase())).map(p => ({ id: p.id, other: p, lastMessage: demoMessages[p.id]?.slice(-1)[0]?.body || "Start a conversation" }))).map(chat => (
-            <button key={chat.id} className={`chat-row ${activeId === chat.id ? "selected" : ""}`} onClick={() => { setActiveId(chat.id); setMobileChatOpen(true); setNotice(""); }}>
-              <Avatar person={chat.other} online={chat.other.id === "demo-maya" || chat.other.id === "demo-alex" || chat.other.id === "demo-jordan"}/>
-              <span className="chat-row-text"><span className="chat-row-name">{chat.other.display_name}</span><span className="chat-row-preview">{chat.lastMessage || "Say hello 👋"}</span></span>
-              <span className="chat-row-time">{(chat as any).updated_at ? new Date((chat as any).updated_at).toLocaleDateString() : ""}</span>
-            </button>
-          ))}
-          {session && filteredChats.length === 0 && <div className="empty-list">No conversations yet.<br/>Use + to find someone by username.</div>}
+    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-80 border-r border-slate-800 flex flex-col bg-slate-900">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="w-6 h-6 text-indigo-500" />
+            <span className="font-bold text-lg text-slate-100">ChatWave</span>
+          </div>
+          <button
+            onClick={() => supabase?.auth.signOut()}
+            className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
+            title="Sign Out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
-        <div className="section-label people-label"><span>PEOPLE</span><span>{filteredPeople.length}</span></div>
-        <div className="people-list">{filteredPeople.slice(0, 6).map(person => <button key={person.id} className="person-row" onClick={() => void openChat(person)}><Avatar person={person} online={false}/><span>{person.display_name}</span><Plus size={15}/></button>)}</div>
-        {!configured && <div className="demo-banner"><div className="demo-icon"><LockKeyhole size={17}/></div><div><strong>Preview mode</strong><span>Connect Supabase to enable real accounts and live messaging.</span></div></div>}
-        <div className="profile-footer"><Avatar person={{ id: "me", username: "you", display_name: session?.user?.user_metadata?.display_name || session?.user?.email || "Guest", avatar_color: "#7565ef" }}/><div className="profile-text"><strong>{session?.user?.user_metadata?.display_name || session?.user?.email || "Guest User"}</strong><span>{session ? "Signed in" : "Preview account"}</span></div>{session && <button className="icon-button" onClick={() => void logout()} aria-label="Log out"><LogOut size={17}/></button>}</div>
-      </aside>
 
-      <section className={`conversation ${!mobileChatOpen ? "hide-mobile" : ""}`}>
-        <header className="conversation-header">
-          <button className="icon-button mobile-back" onClick={() => setMobileChatOpen(false)} aria-label="Back to chats"><ArrowLeft size={20}/></button>
-          <Avatar person={activePerson} online={activePerson.id === "demo-maya" || activePerson.id === "demo-alex" || activePerson.id === "demo-jordan"} large/>
-          <div className="header-person"><h2>{activePerson.display_name}</h2><span><i className={`status-dot ${activePerson.id === "demo-maya" || activePerson.id === "demo-alex" || activePerson.id === "demo-jordan" ? "online" : ""}`}/>{session ? "Private conversation" : "Sample conversation"}</span></div>
-          <div className="header-actions"><div className="encrypted-label"><LockKeyhole size={14}/> Private chat</div></div>
-        </header>
-        <div className="message-area">
-          <div className="day-divider"><span>YOUR CONVERSATION</span></div>
-          {!currentMessages.length && <div className="empty-conversation"><div className="empty-bubble"><MessageCircle size={25}/></div><h3>Say hello to {activePerson.display_name.split(" ")[0]}</h3><p>Your private conversation starts here. Send the first message.</p></div>}
-          {currentMessages.map((message, index) => <div key={message.id} className={`message-line ${isMine(message) ? "mine" : "theirs"}`}><div className="message-content">{!isMine(message) && <span className="sender-name">{activePerson.display_name.split(" ")[0]}</span>}<div className={`bubble ${isMine(message) ? "bubble-mine" : "bubble-theirs"}`}>{message.body}</div><span className="message-time">{isDemo ? message.created_at : new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{isMine(message) && <span className="read-check"> ✓</span>}</span></div></div>)}
-          <div ref={bottomRef}/>
+        <div className="p-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search people..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
         </div>
-        {notice && <div className="notice"><span>{notice}</span><button onClick={() => setNotice("")}>Dismiss</button></div>}
-        <form className="composer-wrap" onSubmit={sendMessage}><div className="composer"><input value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${activePerson.display_name.split(" ")[0]}...`} aria-label="Message" maxLength={5000}/><span className="composer-hint">Enter ↵</span><button className="send-button" disabled={!draft.trim()} aria-label="Send message"><Send size={18}/></button></div><div className="composer-footer"><span><LockKeyhole size={12}/> Only members of this conversation can access messages</span><span>{draft.length}/5000</span></div></form>
-      </section>
-      <aside className="details-panel">
-        <div className="details-top"><span>CONTACT DETAILS</span><div className="details-lock"><LockKeyhole size={15}/></div></div>
-        <div className="contact-card"><Avatar person={activePerson} large xl online={activePerson.id === "demo-maya" || activePerson.id === "demo-alex" || activePerson.id === "demo-jordan"}/><h3>{activePerson.display_name}</h3><p>@{activePerson.username}</p><div className="contact-status"><i className={`status-dot ${activePerson.id === "demo-maya" || activePerson.id === "demo-alex" || activePerson.id === "demo-jordan" ? "online" : ""}`}/>{session ? "Chat member" : "Demo contact"}</div></div>
-        <div className="detail-divider"/>
-        <div className="detail-section"><h4><UserRound size={15}/> ABOUT</h4><p>{session ? "You're connected in a private ChatWave conversation." : "A sample profile for the ChatWave preview."}</p></div>
-        <div className="detail-section"><h4><MessageCircle size={15}/> MESSAGES</h4><p>{currentMessages.length} messages in this view</p></div>
-        <div className="privacy-card"><LockKeyhole size={17}/><div><strong>Your privacy matters</strong><p>Conversation access is enforced by database policies when Supabase is configured. This is not end-to-end encryption.</p></div></div>
-        <div className="details-bottom">CHATWAVE <span>·</span> PRIVATE BY DESIGN</div>
-      </aside>
-    </main>
+
+        <div className="flex-1 overflow-y-auto px-2 space-y-4">
+          <div>
+            <div className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Conversations
+            </div>
+            {chats.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-slate-500">No active chats yet.</p>
+            ) : (
+              chats.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setActiveChat(c);
+                    setDemoActive(null);
+                  }}
+                  className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition ${
+                    activeChat?.id === c.id ? "bg-indigo-600/20 border border-indigo-500/30 text-white" : "hover:bg-slate-800/60 text-slate-300"
+                  }`}
+                >
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-white text-sm"
+                    style={{ backgroundColor: c.other.avatar_color || "#6366f1" }}
+                  >
+                    {c.other.display_name[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.other.display_name}</p>
+                    <p className="text-xs text-slate-500 truncate">{c.lastMessage}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div>
+            <div className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              People
+            </div>
+            {filteredPeople.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => startChat(p)}
+                className="w-full flex items-center justify-between p-2 rounded-lg text-left hover:bg-slate-800/60 transition group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-white text-xs"
+                    style={{ backgroundColor: p.avatar_color || "#6366f1" }}
+                  >
+                    {p.display_name[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-200 truncate">{p.display_name}</p>
+                    <p className="text-xs text-slate-500 truncate">@{p.username}</p>
+                  </div>
+                </div>
+                <Plus className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition" />
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <div className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Demo Profiles
+            </div>
+            {filteredDemo.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setDemoActive(p);
+                  setActiveChat(null);
+                }}
+                className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition ${
+                  demoActive?.id === p.id ? "bg-indigo-600/20 border border-indigo-500/30 text-white" : "hover:bg-slate-800/60 text-slate-300"
+                }`}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-white text-xs"
+                  style={{ backgroundColor: p.avatar_color }}
+                >
+                  {p.display_name[0]}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-200 truncate">{p.display_name}</p>
+                  <p className="text-xs text-slate-500 truncate">Demo User</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Chat Panel */}
+      <div className="flex-1 flex flex-col bg-slate-950">
+        {activeChat || demoActive ? (
+          <>
+            <div className="p-4 border-b border-slate-800 bg-slate-900 flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
+                style={{
+                  backgroundColor: activeChat ? activeChat.other.avatar_color || "#6366f1" : demoActive?.avatar_color
+                }}
+              >
+                {(activeChat ? activeChat.other.display_name : demoActive?.display_name)?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-100">
+                  {activeChat ? activeChat.other.display_name : demoActive?.display_name}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {activeChat ? `@${activeChat.other.username}` : "Demo Mode"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {demoActive ? (
+                (demoTexts[demoActive.id] || []).map((m, i) => (
+                  <div key={i} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-xs md:max-w-md px-4 py-2 rounded-2xl text-sm ${
+                        m.mine ? "bg-indigo-600 text-white rounded-br-none" : "bg-slate-800 text-slate-200 rounded-bl-none"
+                      }`}
+                    >
+                      <p>{m.body}</p>
+                      <span className="text-[10px] opacity-60 block text-right mt-1">{m.time}</span>
+                    </div>
+                  </div>
+                ))
+              ) : loadingMessages ? (
+                <div className="flex items-center justify-center h-full text-slate-500 gap-2">
+                  <LoaderCircle className="w-5 h-5 animate-spin" />
+                  <span>Loading messages...</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <p className="text-center text-slate-500 text-sm mt-10">
+                  No messages yet. Say hello! 👋
+                </p>
+              ) : (
+                messages.map((m) => {
+                  const mine = m.sender_id === session.user.id;
+                  return (
+                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-xs md:max-w-md px-4 py-2 rounded-2xl text-sm ${
+                          mine ? "bg-indigo-600 text-white rounded-br-none" : "bg-slate-800 text-slate-200 rounded-bl-none"
+                        }`}
+                      >
+                        <p>{m.body}</p>
+                        <span className="text-[10px] opacity-60 block text-right mt-1">
+                          {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={endRef} />
+            </div>
+
+            <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900 flex gap-2">
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                className="flex-1 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition flex items-center justify-center"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+            <MessageCircle className="w-12 h-12 mb-3 text-slate-700" />
+            <p className="text-base font-medium">Select a chat or person to start messaging</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
-
-function Avatar({ person, online = false, large = false, xl = false }: { person: Profile; online?: boolean; large?: boolean; xl?: boolean }) {
-  return <span className={`avatar ${large ? "avatar-large" : ""} ${xl ? "avatar-xl" : ""}`} style={{ background: person.avatar_color || "#7565ef" }}><span>{(person.display_name || person.username || "?").trim().slice(0, 1).toUpperCase()}</span>{online && <i className="avatar-online"/>}</span>;
-}
-

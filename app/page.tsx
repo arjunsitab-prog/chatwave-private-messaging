@@ -78,7 +78,7 @@ export default function Home() {
     for (const row of (memberships || []) as any[]) {
       const convo = row.conversations;
       if (!convo) continue;
-      const member = (convo. || []).find((m: any) => m.user_id !== me);
+      const member = (const member = (convo.members || []).find((m: any) => m.user_id !== me); || []).find((m: any) => m.user_id !== me);
       if (!member?.profiles) continue;
       const { data: last } = await supabase.from("messages").select("body").eq("conversation_id", convo.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       found.push({ id: convo.id, other: member.profiles, lastMessage: last?.body || "Start a conversation", updated_at: convo.updated_at });

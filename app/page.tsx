@@ -369,3 +369,272 @@ export default function Page() {
                   type="text"
                   value={statusMessage}
                   onChange={(e) => setStatusMessage(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-medium text-sm transition"
+                >
+                  Save Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col shrink-0">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm text-white">
+              CB
+            </div>
+            <span className="font-bold text-blue-400 text-lg">Chatbeep</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Settings & Profile"
+              className="p-2 text-gray-400 hover:text-blue-400 hover:bg-zinc-900 rounded-lg transition"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Log Out"
+              className="p-2 text-gray-400 hover:text-red-400 hover:bg-zinc-900 rounded-lg transition"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* User Search Bar */}
+        <div className="p-3 border-b border-zinc-900 flex space-x-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search or friend's email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddContact()}
+              className="w-full bg-zinc-900 text-xs rounded-lg pl-9 pr-3 py-2 text-white border border-zinc-800 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          {searchQuery.trim() && (
+            <button
+              onClick={handleAddContact}
+              title="Add contact"
+              className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Contacts List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <p className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            Active Contacts
+          </p>
+
+          {filteredContacts.length === 0 ? (
+            <div className="px-3 py-4 text-center">
+              <p className="text-xs text-gray-500">No contacts found.</p>
+              {searchQuery.trim() && (
+                <button
+                  onClick={handleAddContact}
+                  className="mt-2 text-xs text-blue-400 hover:underline flex items-center justify-center space-x-1 w-full"
+                >
+                  <span>Chat with "{searchQuery}"</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredContacts.map((c) => {
+              const isSelected = selectedUser?.email === c.email;
+              const isOnline = onlineUsers.has(c.email);
+              return (
+                <button
+                  key={c.email}
+                  onClick={() => setSelectedUser(c)}
+                  className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left transition ${
+                    isSelected
+                      ? 'bg-blue-600/20 border border-blue-500/40 text-white'
+                      : 'hover:bg-zinc-900 text-gray-400'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-semibold text-blue-400">
+                      {c.email.substring(0, 2).toUpperCase()}
+                    </div>
+                    <span
+                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${
+                        isOnline ? 'bg-green-500' : 'bg-gray-600'
+                      }`}
+                    />
+                  </div>
+                  <div className="flex-1 truncate">
+                    <p className="text-sm font-medium text-white truncate">{c.email}</p>
+                    <p className="text-xs text-gray-500">{isOnline ? 'Online' : 'Offline'}</p>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Profile Card Footer */}
+        <div className="p-3 border-t border-zinc-900 bg-zinc-900/50 flex items-center space-x-3 shrink-0">
+          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">
+            {displayName.substring(0, 2).toUpperCase()}
+          </div>
+          <div className="flex-1 truncate">
+            <p className="text-xs font-semibold text-white truncate">{displayName}</p>
+            <p className="text-[10px] text-gray-400 truncate">{statusMessage}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col bg-black overflow-hidden">
+        {selectedUser ? (
+          <>
+            {/* Top Chat Header */}
+            <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-950 shrink-0">
+              <div className="flex items-center space-x-3">
+                <div className="relative shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white">
+                    {selectedUser.email.substring(0, 2).toUpperCase()}
+                  </div>
+                  <span
+                    className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${
+                      onlineUsers.has(selectedUser.email) ? 'bg-green-500' : 'bg-gray-600'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-blue-400">{selectedUser.email}</h2>
+                  <p className="text-xs text-gray-500">
+                    {onlineUsers.has(selectedUser.email) ? 'Online' : 'Offline'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages Stream */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-2">
+                  <UserIcon className="w-10 h-10 text-zinc-800" />
+                  <p className="text-sm">No messages yet with {selectedUser.email}. Say hello!</p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isMe = msg.sender_id === user.email || msg.sender_id === user.id;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs md:max-w-md p-3 rounded-xl ${
+                          isMe
+                            ? 'bg-blue-600 text-white rounded-br-none'
+                            : 'bg-zinc-900 text-gray-200 rounded-bl-none border border-zinc-800'
+                        }`}
+                      >
+                        {msg.image_url && (
+                          <img
+                            src={msg.image_url}
+                            alt="Attachment"
+                            className="rounded-lg mb-2 max-h-60 object-cover"
+                          />
+                        )}
+                        {msg.audio_url && (
+                          <div className="flex items-center space-x-2 my-1">
+                            <Volume2 className="w-5 h-5 text-blue-300" />
+                            <audio controls src={msg.audio_url} className="w-full max-w-[200px]" />
+                          </div>
+                        )}
+                        <p className="text-sm">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Input Bar with Voice Notes */}
+            <form
+              onSubmit={handleSendMessage}
+              className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0"
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                className="hidden"
+                accept="image/*"
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
+
+              {/* Voice Note Button */}
+              {isRecording ? (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition animate-pulse flex items-center space-x-1"
+                >
+                  <Square className="w-5 h-5" />
+                  <span className="text-xs font-semibold pr-1">Recording...</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
+                  title="Record Voice Note"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+              )}
+
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder={`Message ${selectedUser.email}...`}
+                className="flex-1 bg-zinc-900 text-white px-4 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500 text-sm"
+              />
+              <button
+                type="submit"
+                className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shrink-0"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-2">
+            <UserIcon className="w-12 h-12 text-zinc-800" />
+            <p className="text-sm">Search your friend's email on the left to start chatting!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -13,7 +13,11 @@ import {
   Square,
   Settings,
   X,
-  Volume2
+  Volume2,
+  Check,
+  Clock,
+  Home,
+  MessageSquare
 } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -33,6 +37,7 @@ interface Message {
 interface Contact {
   id: string;
   email: string;
+  lastMessage?: string;
 }
 
 export default function Page() {
@@ -79,7 +84,7 @@ export default function Page() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Persistent Session Handler (Remembers login automatically)
+  // Persistent Session Handler
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -492,28 +497,40 @@ export default function Page() {
 
       {/* Sidebar */}
       <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col shrink-0">
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">
+        {/* Navigation Items (Matching Image Style) */}
+        <div className="p-3 border-b border-zinc-900 space-y-1">
+          <button className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-zinc-900 text-sm font-medium transition">
+            <Home className="w-4 h-4 text-blue-400" />
+            <span>Home</span>
+          </button>
+          <button className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-zinc-900 text-sm font-medium transition">
+            <MessageSquare className="w-4 h-4 text-blue-400" />
+            <span>Threads</span>
+          </button>
+        </div>
+
+        {/* Sidebar Header & Profile Settings */}
+        <div className="p-3 border-b border-blue-900/40 flex items-center justify-between bg-zinc-900/30">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm text-white">
+            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white">
               CB
             </div>
-            <span className="font-bold text-blue-400 text-lg">Chatbeep</span>
+            <span className="font-bold text-blue-400 text-base">Chatbeep</span>
           </div>
           <div className="flex items-center space-x-1">
             <button
               onClick={() => setShowSettings(true)}
               title="Settings & Profile"
-              className="p-2 text-gray-400 hover:text-blue-400 hover:bg-zinc-900 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-zinc-900 rounded-lg transition"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-4 h-4" />
             </button>
             <button
               onClick={handleLogout}
               title="Log Out"
-              className="p-2 text-gray-400 hover:text-red-400 hover:bg-zinc-900 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-zinc-900 rounded-lg transition"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -542,21 +559,21 @@ export default function Page() {
           )}
         </div>
 
-        {/* Contacts List */}
+        {/* Contacts List with Status Indicators */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           <p className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-            Active Contacts
+            Conversations
           </p>
 
           {filteredContacts.length === 0 ? (
             <div className="px-3 py-4 text-center">
-              <p className="text-xs text-gray-500">No contacts found.</p>
+              <p className="text-xs text-gray-500">No conversations yet.</p>
               {searchQuery.trim() && (
                 <button
                   onClick={handleAddContact}
                   className="mt-2 text-xs text-blue-400 hover:underline flex items-center justify-center space-x-1 w-full"
                 >
-                  <span>Chat with "{searchQuery}"</span>
+                  <span>Start chat with "{searchQuery}"</span>
                 </button>
               )}
             </div>
@@ -564,29 +581,50 @@ export default function Page() {
             filteredContacts.map((c) => {
               const isSelected = selectedUser?.email === c.email;
               const isOnline = onlineUsers.has(c.email);
+              
+              // Get initials for profile picture
+              const initials = c.email.substring(0, 2).toUpperCase();
+
               return (
                 <button
                   key={c.email}
                   onClick={() => setSelectedUser(c)}
-                  className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left transition ${
+                  className={`w-full flex items-center space-x-3 p-2.5 rounded-xl text-left transition ${
                     isSelected
                       ? 'bg-blue-600/20 border border-blue-500/40 text-white'
-                      : 'hover:bg-zinc-900 text-gray-400'
+                      : 'hover:bg-zinc-900/80 text-gray-300'
                   }`}
                 >
+                  {/* Profile Avatar with Status Badges */}
                   <div className="relative shrink-0">
-                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-semibold text-blue-400">
-                      {c.email.substring(0, 2).toUpperCase()}
+                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-blue-400">
+                      {initials}
                     </div>
-                    <span
-                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${
-                        isOnline ? 'bg-green-500' : 'bg-gray-600'
-                      }`}
-                    />
+
+                    {/* Online / Offline Badges matching the image style */}
+                    {isOnline ? (
+                      <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-zinc-950 rounded-full flex items-center justify-center text-[9px] text-black font-extrabold shadow-sm">
+                        <Check className="w-2.5 h-2.5 text-black stroke-[3]" />
+                      </span>
+                    ) : (
+                      <span className="absolute bottom-0 right-0 w-4 h-4 bg-zinc-700 border-2 border-zinc-950 rounded-full flex items-center justify-center text-[9px] text-gray-300 shadow-sm">
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                      </span>
+                    )}
                   </div>
+
                   <div className="flex-1 truncate">
-                    <p className="text-sm font-medium text-white truncate">{c.email}</p>
-                    <p className="text-xs text-gray-500">{isOnline ? 'Online' : 'Offline'}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-white truncate">{c.email.split('@')[0]}</p>
+                      <span className="text-[10px] text-gray-500">
+                        {isOnline ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                      {isSelected && messages.length > 0
+                        ? messages[messages.length - 1].content
+                        : `Chat with ${c.email.split('@')[0]}`}
+                    </p>
                   </div>
                 </button>
               );
@@ -617,11 +655,13 @@ export default function Page() {
                   <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white">
                     {selectedUser.email.substring(0, 2).toUpperCase()}
                   </div>
-                  <span
-                    className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${
-                      onlineUsers.has(selectedUser.email) ? 'bg-green-500' : 'bg-gray-600'
-                    }`}
-                  />
+                  {onlineUsers.has(selectedUser.email) ? (
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-black rounded-full flex items-center justify-center">
+                      <Check className="w-2 h-2 text-black stroke-[3]" />
+                    </span>
+                  ) : (
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-zinc-700 border-2 border-black rounded-full" />
+                  )}
                 </div>
                 <div>
                   <h2 className="font-semibold text-blue-400">{selectedUser.email}</h2>

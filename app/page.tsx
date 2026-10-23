@@ -30,6 +30,11 @@ export default function Page() {
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Set browser tab title dynamically
+  useEffect(() => {
+    document.title = 'Chatbeep';
+  }, []);
+
   // 1. Request Browser Notification Permissions
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -119,7 +124,7 @@ export default function Page() {
         <div className="flex items-center space-x-3">
           <div className="relative">
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold">
-              Chat
+              CB
             </div>
             <span
               className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${
@@ -128,7 +133,7 @@ export default function Page() {
             />
           </div>
           <div>
-            <h3 className="font-semibold text-blue-400">Chatbeep Messenger</h3>
+            <h3 className="font-semibold text-blue-400 text-lg tracking-wide">Chatbeep</h3>
             <p className="text-xs text-gray-400">
               {isRecipientOnline ? 'Online' : 'Offline'}
             </p>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Send, Image, Trash2, Edit2, Check } from 'lucide-react';
 
-// Initialize Supabase client using environment variables
+// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -18,7 +18,10 @@ interface Message {
   is_edited?: boolean;
 }
 
-export default function ChatWindow({ currentUserId = 'user-1', recipientId = 'user-2' }: { currentUserId?: string; recipientId?: string }) {
+export default function Page() {
+  const currentUserId = 'user-1';
+  const recipientId = 'user-2';
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);

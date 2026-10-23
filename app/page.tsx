@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { Search, Plus, Send, MessageCircle, Users, LogOut, LockKeyhole, ArrowLeft, UserRound, LoaderCircle } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+import { Search, Plus, Send, MessageCircle, Users, LogOut, LockKeyhole, ArrowLeft, UserRound, Loader2 } from "lucide-react";
 
 type Profile = { id: string; username: string; display_name: string; avatar_color?: string; };
 type Chat = { id: string; other: Profile; lastMessage?: string; updated_at?: string; };
@@ -358,7 +358,7 @@ export default function Home() {
               disabled={loadingAuth}
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-sm transition flex items-center justify-center gap-2"
             >
-              {loadingAuth && <LoaderCircle className="w-4 h-4 animate-spin" />}
+              {loadingAuth && <Loader2 className="w-4 h-4 animate-spin" />}
               {authMode === "login" ? "Sign In" : "Sign Up"}
             </button>
           </form>
@@ -529,7 +529,7 @@ export default function Home() {
                 ))
               ) : loadingMessages ? (
                 <div className="flex items-center justify-center h-full text-slate-500 gap-2">
-                  <LoaderCircle className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>Loading messages...</span>
                 </div>
               ) : messages.length === 0 ? (

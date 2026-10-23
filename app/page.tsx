@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { Send, Image, Trash2, Edit2, Check } from 'lucide-react';
+
+// Initialize Supabase client using environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Message {
   id: string;
@@ -13,8 +18,7 @@ interface Message {
   is_edited?: boolean;
 }
 
-export default function ChatWindow({ currentUserId, recipientId }: { currentUserId: string; recipientId: string }) {
-  const supabase = createClientComponentClient();
+export default function ChatWindow({ currentUserId = 'user-1', recipientId = 'user-2' }: { currentUserId?: string; recipientId?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -51,7 +55,7 @@ export default function ChatWindow({ currentUserId, recipientId }: { currentUser
     return () => {
       supabase.removeChannel(room);
     };
-  }, [currentUserId, supabase]);
+  }, [currentUserId]);
 
   // 3. Image Upload Handler
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +110,7 @@ export default function ChatWindow({ currentUserId, recipientId }: { currentUser
   const isRecipientOnline = onlineUsers.has(recipientId);
 
   return (
-    <div className="flex flex-col h-full bg-black text-white p-4">
+    <div className="flex flex-col h-screen bg-black text-white p-4">
       {/* Header with Online Indicator */}
       <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
         <div className="flex items-center space-x-3">
@@ -121,7 +125,7 @@ export default function ChatWindow({ currentUserId, recipientId }: { currentUser
             />
           </div>
           <div>
-            <h3 className="font-semibold text-blue-400">Recipient</h3>
+            <h3 className="font-semibold text-blue-400">Chatbeep Messenger</h3>
             <p className="text-xs text-gray-400">
               {isRecipientOnline ? 'Online' : 'Offline'}
             </p>

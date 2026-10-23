@@ -73,7 +73,7 @@ export default function Home() {
     const me = session.user.id;
     const { data: profiles } = await supabase.from("profiles").select("id,username,display_name,avatar_color").neq("id", me).order("display_name");
     setPeople((profiles || []) as Profile[]);
-    const { data: memberships } = await supabase.from("").select("conversation_id, conversations(id, updated_at, (user_id, profiles(id,username,display_name,avatar_color)))");
+    const { data: memberships } = await const { data: memberships } = await supabase.from("conversation_members").select("conversation_id, conversations(id, updated_at, conversation_members(user_id, profiles(id, username, display_name, avatar_color)))");.select("conversation_id, conversations(id, updated_at, (user_id, profiles(id,username,display_name,avatar_color)))");
     const found: Chat[] = [];
     for (const row of (memberships || []) as any[]) {
       const convo = row.conversations;

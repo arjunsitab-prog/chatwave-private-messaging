@@ -181,4 +181,33 @@ export default function Page() {
     room
       .on('presence', { event: 'sync' }, () => {
         const state = room.presenceState();
-        setOnlineUsers
+        setOnlineUsers(new Set(Object.keys(state)));
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await room.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(room);
+    };
+  }, [user]);
+
+  // Notification audio beep & push alerts
+  const notifyUser = (sender: string, text: string) => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {}
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(

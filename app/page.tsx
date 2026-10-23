@@ -158,6 +158,11 @@ export default function Page() {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    await supabase.from('messages').delete().eq('id', messageId);
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newMessage.trim() || !user || !selectedUser || selectedUser.isBlocked) return;
@@ -173,7 +178,7 @@ export default function Page() {
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?[0] || !user || !selectedUser) return;
+    if (!e.target.files?.[0] || !user || !selectedUser) return;
     setUploading(true);
     const file = e.target.files[0];
     const filePath = `images/${Math.random()}.${file.name.split('.').pop()}`;
@@ -229,4 +234,109 @@ export default function Page() {
     <div className="flex h-screen bg-black text-white overflow-hidden relative">
       {showSettings && (
         <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-
+          <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-md relative">
+            <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-400"><X className="w-5 h-5" /></button>
+            <h2 className="text-xl font-bold text-blue-400 mb-4">Settings</h2>
+            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-3" placeholder="Display Name" />
+            <input type="text" value={statusMessage} onChange={(e) => setStatusMessage(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white" placeholder="Status" />
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col">
+        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">
+          <span className="font-bold text-blue-400">Chatbeep</span>
+          <div className="flex space-x-1">
+            <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-400"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => supabase.auth.signOut()} className="p-2 text-gray-400 hover:text-red-400"><LogOut className="w-5 h-5" /></button>
+          </div>
+        </div>
+
+        <div className="p-3 border-b border-zinc-900 flex space-x-2">
+          <input type="text" placeholder="Search email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddContact()} className="w-full bg-zinc-900 text-xs rounded px-3 py-2 border border-zinc-800 text-white" />
+          {searchQuery.trim() && <button onClick={handleAddContact} className="bg-blue-600 px-3 rounded"><Plus className="w-4 h-4" /></button>}
+        </div>
+
+        <div className="p-2 border-b border-zinc-900 flex justify-between">
+          <button onClick={() => setViewArchived(false)} className={`flex-1 py-1 rounded text-xs font-semibold ${!viewArchived ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Chats</button>
+          <button onClick={() => setViewArchived(true)} className={`flex-1 py-1 rounded text-xs font-semibold ${viewArchived ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Archived ({archivedCount})</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {sortedContacts.map((c) => (
+            <div key={c.email} className="relative group">
+              <button onClick={() => setSelectedUser(c)} className={`w-full flex items-center justify-between p-2 rounded-xl text-left ${selectedUser?.email === c.email ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-zinc-900'}`}>
+                <div className="truncate flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-blue-400 font-bold">{c.email[0].toUpperCase()}</div>
+                  <span className="text-xs truncate">{c.email}</span>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setOpenMenuContactId(openMenuContactId === c.email ? null : c.email); }} className="opacity-0 group-hover:opacity-100 p-1"><ChevronDown className="w-4 h-4" /></button>
+              </button>
+              {openMenuContactId === c.email && (
+                <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-10 w-44 bg-zinc-900 border border-zinc-800 rounded shadow-xl z-50 py-1 text-xs">
+                  <button onClick={() => { toggleContactProperty(c.email, 'isArchived'); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left hover:bg-zinc-800">{c.isArchived ? 'Unarchive' : 'Archive'}</button>
+                  <button onClick={() => { toggleContactProperty(c.email, 'isPinned'); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left hover:bg-zinc-800">{c.isPinned ? 'Unpin' : 'Pin'}</button>
+                  <button onClick={() => { handleDeleteChat(c.email); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left text-red-400 hover:bg-zinc-800">Delete</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Chat */}
+      <div className="flex-1 flex flex-col bg-black overflow-hidden">
+        {selectedUser ? (
+          <>
+            <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-950 relative">
+              <span className="font-semibold text-blue-400">{selectedUser.email}</span>
+              <div className="relative">
+                <button onClick={(e) => { e.stopPropagation(); setShowChatHeaderMenu(!showChatHeaderMenu); }} className="p-2 text-gray-400 hover:text-white"><MoreVertical className="w-5 h-5" /></button>
+                {showChatHeaderMenu && (
+                  <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-10 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-xl z-50 py-1 text-xs">
+                    <button onClick={() => { toggleContactProperty(selectedUser.email, 'isMuted'); setShowChatHeaderMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-zinc-800">Mute notifications</button>
+                    <button onClick={() => { handleDeleteChat(selectedUser.email); setShowChatHeaderMenu(false); }} className="w-full px-4 py-2 text-left text-red-400 hover:bg-zinc-800">Delete chat</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.map((m) => {
+                const isMe = m.sender_id === user.email || m.sender_id === user.id;
+                return (
+                  <div key={m.id} className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div className="flex items-center space-x-2">
+                      {isMe && <button onClick={() => handleDeleteMessage(m.id)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
+                      <div className={`p-3 rounded-xl max-w-md text-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-zinc-900 border border-zinc-800 text-gray-200 rounded-bl-none'}`}>
+                        {m.image_url && <img src={m.image_url} alt="img" className="rounded mb-2 max-h-48 object-cover" />}
+                        {m.audio_url && <audio controls src={m.audio_url} className="w-48" />}
+                        <p>{m.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950">
+              <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="text-blue-400 p-2"><ImageIcon className="w-5 h-5" /></button>
+              {isRecording ? (
+                <button type="button" onClick={() => mediaRecorderRef.current?.stop()} className="bg-red-600 p-2 rounded text-white text-xs animate-pulse">Stop</button>
+              ) : (
+                <button type="button" onClick={startRecording} className="text-blue-400 p-2"><Mic className="w-5 h-5" /></button>
+              )}
+              <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-zinc-900 text-white px-3 py-2 rounded text-sm border border-zinc-800 focus:outline-none" />
+              <button type="submit" className="bg-blue-600 p-2 rounded text-white"><Send className="w-5 h-5" /></button>
+            </form>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500 text-sm">Select a chat to start messaging</div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -5,8 +5,7 @@ import { createClient, User } from '@supabase/supabase-js';
 import {
   Send, Image as ImageIcon, LogOut, Search, User as UserIcon, Plus, Mic, Square,
   Settings, X, Volume2, Check, Trash2, ChevronDown, Archive, VolumeX, Pin,
-  Mail, Heart, Ban, Eraser, Inbox, MoreVertical, CheckSquare, Clock, ListPlus,
-  Download, Link, PhoneCall, Flag
+  Heart, Ban, Eraser, MoreVertical, Flag
 } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -47,7 +46,7 @@ export default function Page() {
   const [displayName, setDisplayName] = useState('');
   const [statusMessage, setStatusMessage] = useState('Hey there! I am using Chatbeep.');
 
-  // Navigation & Contacts
+  // Contacts State
   const [searchQuery, setSearchQuery] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
@@ -55,16 +54,21 @@ export default function Page() {
   const [viewArchived, setViewArchived] = useState(false);
   const [showChatHeaderMenu, setShowChatHeaderMenu] = useState(false);
 
+  // Image Preview Modal State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   // Messaging State
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
-  // Voice & File Refs
+  // Voice Recording State & Refs
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -105,7 +109,7 @@ export default function Page() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Contacts
+  // Fetch Saved Contacts
   useEffect(() => {
     if (!user) return;
     const myId = user.email || user.id;
@@ -144,7 +148,7 @@ export default function Page() {
     return () => { supabase.removeChannel(room); };
   }, [user]);
 
-  // Realtime Messages & Deletions
+  // Fetch & Subscribe to Messages
   useEffect(() => {
     if (!user || !selectedUser) return;
     const myId = user.email || user.id;
@@ -251,6 +255,7 @@ export default function Page() {
     setUploading(true);
     const file = e.target.files[0];
     const filePath = `images/${Math.random()}.${file.name.split('.').pop()}`;
+
     await supabase.storage.from('chat-attachments').upload(filePath, file);
     const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
 
@@ -264,33 +269,53 @@ export default function Page() {
     setUploading(false);
   };
 
+  // Fixed Voice Note Handler
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
-      recorder.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      recorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+
       recorder.onstop = async () => {
+        setIsRecording(false);
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const filePath = `voice/${Math.random()}.webm`;
         await supabase.storage.from('chat-attachments').upload(filePath, blob);
         const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
 
-        await supabase.from('messages').insert([{
-          sender_id: user?.email || user?.id,
-          recipient_id: selectedUser?.email,
-          content: '🎙️ Voice Note',
-          audio_url: data.publicUrl,
-          created_at: new Date().toISOString(),
-        }]);
-        stream.getTracks().forEach((t) => t.stop());
+        if (user && selectedUser) {
+          await supabase.from('messages').insert([{
+            sender_id: user.email || user.id,
+            recipient_id: selectedUser.email,
+            content: '🎙️ Voice Note',
+            audio_url: data.publicUrl,
+            created_at: new Date().toISOString(),
+          }]);
+        }
+
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
       };
 
       recorder.start();
       setIsRecording(true);
-    } catch { alert('Mic access denied.'); }
+    } catch {
+      alert('Microphone access denied or unavailable.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
   };
 
   if (loadingSession) {
@@ -302,7 +327,7 @@ export default function Page() {
       <div className="flex items-center justify-center min-h-screen bg-black text-white p-4">
         <div className="w-full max-w-md bg-zinc-950 p-6 rounded-xl border border-blue-900/50 shadow-2xl">
           <h1 className="text-2xl font-bold text-blue-400 mb-1">Chatbeep</h1>
-          <p className="text-xs text-gray-400 mb-6">Full-Featured Messaging App</p>
+          <p className="text-xs text-gray-400 mb-6">Messaging Platform</p>
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Email</label>
@@ -331,6 +356,16 @@ export default function Page() {
 
   return (
     <div className="flex h-screen h-[100dvh] bg-black text-white overflow-hidden relative">
+      {/* Lightbox Modal for Opening Images */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <button onClick={() => setPreviewImage(null)} className="absolute top-4 right-4 p-2 bg-zinc-800 text-white rounded-full hover:bg-zinc-700">
+            <X className="w-6 h-6" />
+          </button>
+          <img src={previewImage} alt="Expanded View" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettings && (
         <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -368,7 +403,7 @@ export default function Page() {
         <div className="p-3 border-b border-zinc-900 flex space-x-2">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" />
-            <input type="text" placeholder="Search or friend's email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddContact()} className="w-full bg-zinc-900 text-xs rounded-lg pl-9 pr-3 py-2 text-white border border-zinc-800 focus:outline-none focus:border-blue-500" />
+            <input type="text" placeholder="Search or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddContact()} className="w-full bg-zinc-900 text-xs rounded-lg pl-9 pr-3 py-2 text-white border border-zinc-800 focus:outline-none focus:border-blue-500" />
           </div>
           {searchQuery.trim() && <button onClick={handleAddContact} className="bg-blue-600 hover:bg-blue-500 px-3 rounded-lg text-white"><Plus className="w-4 h-4" /></button>}
         </div>
@@ -447,7 +482,7 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* WhatsApp-Style Top Right Menu */}
+              {/* Chat Menu Header */}
               <div className="relative">
                 <button onClick={(e) => { e.stopPropagation(); setShowChatHeaderMenu(!showChatHeaderMenu); }} className="p-2 text-gray-400 hover:text-white hover:bg-zinc-900 rounded-lg transition"><MoreVertical className="w-5 h-5" /></button>
                 {showChatHeaderMenu && (
@@ -464,7 +499,7 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Messages */}
+            {/* Messages Stream */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-2">
@@ -479,8 +514,20 @@ export default function Page() {
                       <div className="flex items-center space-x-2">
                         {isMe && <button onClick={() => handleDeleteMessage(msg.id)} title="Delete message" className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>}
                         <div className={`max-w-xs md:max-w-md p-3 rounded-xl ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-zinc-900 text-gray-200 rounded-bl-none border border-zinc-800'}`}>
-                          {msg.image_url && <img src={msg.image_url} alt="Attachment" className="rounded-lg mb-2 max-h-60 object-cover" />}
-                          {msg.audio_url && <div className="flex items-center space-x-2 my-1"><Volume2 className="w-5 h-5 text-blue-300" /><audio controls src={msg.audio_url} className="w-full max-w-[200px]" /></div>}
+                          {msg.image_url && (
+                            <img
+                              src={msg.image_url}
+                              alt="Attachment"
+                              onClick={() => setPreviewImage(msg.image_url || null)}
+                              className="rounded-lg mb-2 max-h-60 object-cover cursor-pointer hover:opacity-90 transition"
+                            />
+                          )}
+                          {msg.audio_url && (
+                            <div className="flex items-center space-x-2 my-1">
+                              <Volume2 className="w-5 h-5 text-blue-300" />
+                              <audio controls src={msg.audio_url} className="w-full max-w-[200px]" />
+                            </div>
+                          )}
                           <p className="text-sm">{msg.content}</p>
                         </div>
                       </div>
@@ -495,11 +542,19 @@ export default function Page() {
             <form onSubmit={handleSendMessage} className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0">
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
               <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg"><ImageIcon className="w-5 h-5" /></button>
+              
+              {/* Voice Note Button */}
               {isRecording ? (
-                <button type="button" onClick={() => mediaRecorderRef.current?.stop()} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg animate-pulse flex items-center space-x-1"><Square className="w-5 h-5" /><span className="text-xs font-semibold pr-1">Stop</span></button>
+                <button type="button" onClick={stopRecording} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg animate-pulse flex items-center space-x-1">
+                  <Square className="w-5 h-5" />
+                  <span className="text-xs font-semibold pr-1">Stop Recording</span>
+                </button>
               ) : (
-                <button type="button" onClick={startRecording} title="Voice Note" className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg"><Mic className="w-5 h-5" /></button>
+                <button type="button" onClick={startRecording} title="Voice Note" className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg">
+                  <Mic className="w-5 h-5" />
+                </button>
               )}
+
               <input type="text" disabled={selectedUser.isBlocked} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder={selectedUser.isBlocked ? 'User is blocked' : `Message ${selectedUser.email}...`} className="flex-1 bg-zinc-900 text-white px-4 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500 text-sm disabled:opacity-50" />
               <button type="submit" disabled={selectedUser.isBlocked} className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition disabled:opacity-50"><Send className="w-5 h-5" /></button>
             </form>

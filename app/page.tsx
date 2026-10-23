@@ -68,6 +68,10 @@ export default function Page() {
 
   useEffect(() => {
     document.title = 'Chatbeep';
+    // Request Browser Notification Permission
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      Notification.requestPermission();
+    }
   }, []);
 
   // Auto-scroll to bottom of messages
@@ -118,6 +122,31 @@ export default function Page() {
     };
   }, [user]);
 
+  // Play audio beep & send native browser notification
+  const notifyUser = (sender: string, text: string) => {
+    try {
+      // Audio beep
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {}
+
+    // Browser Push Notification
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(`New message from ${sender}`, {
+        body: text,
+        icon: '/favicon.ico',
+      });
+    }
+  };
+
   // Fetch messages & subscribe to realtime chat for selected user
   useEffect(() => {
     if (!user || !selectedUser) return;
@@ -129,13 +158,16 @@ export default function Page() {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .or(
-          `and(sender_id.eq.${myId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${myId})`
-        )
+        .or(`sender_id.eq.${myId},recipient_id.eq.${myId}`)
         .order('created_at', { ascending: true });
 
       if (!error && data) {
-        setMessages(data);
+        const conversationMessages = data.filter(
+          (m) =>
+            (m.sender_id === myId && m.recipient_id === otherId) ||
+            (m.sender_id === otherId && m.recipient_id === myId)
+        );
+        setMessages(conversationMessages);
       }
     };
 
@@ -143,7 +175,7 @@ export default function Page() {
 
     // Realtime subscription for incoming messages
     const messageChannel = supabase
-      .channel(`chat:${myId}-${otherId}`)
+      .channel(`public:messages:${myId}`)
       .on(
         'postgres_changes',
         {
@@ -153,14 +185,19 @@ export default function Page() {
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          if (
+          const isRelevant =
             (newMsg.sender_id === myId && newMsg.recipient_id === otherId) ||
-            (newMsg.sender_id === otherId && newMsg.recipient_id === myId)
-          ) {
+            (newMsg.sender_id === otherId && newMsg.recipient_id === myId);
+
+          if (isRelevant) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
+
+            if (newMsg.sender_id === otherId) {
+              notifyUser(otherId, newMsg.content);
+            }
           }
         }
       )
@@ -215,8 +252,16 @@ export default function Page() {
       created_at: new Date().toISOString(),
     };
 
+    const tempId = Math.random().toString();
+    setMessages((prev) => [...prev, { ...msg, id: tempId }]);
     setNewMessage('');
-    await supabase.from('messages').insert([msg]);
+
+    const { data, error } = await supabase.from('messages').insert([msg]).select();
+    if (error) {
+      console.error('Error sending message:', error.message);
+    } else if (data && data[0]) {
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? data[0] : m)));
+    }
   };
 
   // Image Attachment Upload
@@ -623,7 +668,7 @@ export default function Page() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar with Voice Notes */}
+            {/* Input Bar */}
             <form
               onSubmit={handleSendMessage}
               className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0"

@@ -41,6 +41,7 @@ export default function Page() {
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
+  const [loadingSession, setLoadingSession] = useState(true);
 
   // Profile & Settings State
   const [showSettings, setShowSettings] = useState(false);
@@ -68,7 +69,6 @@ export default function Page() {
 
   useEffect(() => {
     document.title = 'Chatbeep';
-    // Request Browser Notification Permission
     if (typeof window !== 'undefined' && 'Notification' in window) {
       Notification.requestPermission();
     }
@@ -79,13 +79,14 @@ export default function Page() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Check auth session
+  // Persistent Session Handler (Remembers login automatically)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user?.email) {
         setDisplayName(session.user.email.split('@')[0]);
       }
+      setLoadingSession(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -93,6 +94,7 @@ export default function Page() {
       if (session?.user?.email) {
         setDisplayName(session.user.email.split('@')[0]);
       }
+      setLoadingSession(false);
     });
 
     return () => subscription.unsubscribe();
@@ -125,7 +127,6 @@ export default function Page() {
   // Play audio beep & send native browser notification
   const notifyUser = (sender: string, text: string) => {
     try {
-      // Audio beep
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -138,7 +139,6 @@ export default function Page() {
       oscillator.stop(audioCtx.currentTime + 0.15);
     } catch (e) {}
 
-    // Browser Push Notification
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(`New message from ${sender}`, {
         body: text,
@@ -358,6 +358,14 @@ export default function Page() {
       setUploading(false);
     }
   };
+
+  if (loadingSession) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black text-white">
+        <p className="text-sm text-blue-400 animate-pulse">Loading Chatbeep...</p>
+      </div>
+    );
+  }
 
   // 1. Auth View
   if (!user) {

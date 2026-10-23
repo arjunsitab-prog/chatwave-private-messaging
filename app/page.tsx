@@ -14,7 +14,8 @@ import {
   Settings,
   X,
   Volume2,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -101,7 +102,7 @@ export default function Page() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Automatically fetch saved conversation partners from database
+  // Fetch saved contacts from message history
   useEffect(() => {
     if (!user) return;
     const myId = user.email || user.id;
@@ -155,7 +156,7 @@ export default function Page() {
     };
   }, [user]);
 
-  // Play audio beep & send native browser notification
+  // Notification audio beep & push alerts
   const notifyUser = (sender: string, text: string) => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -178,7 +179,7 @@ export default function Page() {
     }
   };
 
-  // Fetch messages & subscribe to realtime chat for selected user
+  // Fetch messages & subscribe to Realtime INSERT and DELETE events
   useEffect(() => {
     if (!user || !selectedUser) return;
 
@@ -204,7 +205,7 @@ export default function Page() {
 
     fetchMessages();
 
-    // Realtime subscription for incoming messages
+    // Realtime channel for incoming & deleted messages
     const messageChannel = supabase
       .channel(`public:messages:${myId}`)
       .on(
@@ -232,6 +233,18 @@ export default function Page() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const deletedId = payload.old.id;
+          setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -239,7 +252,7 @@ export default function Page() {
     };
   }, [user, selectedUser]);
 
-  // Handle Contact Search / Addition
+  // Handle Contact Addition
   const handleAddContact = () => {
     if (!searchQuery.trim()) return;
     const newContact: Contact = {
@@ -272,6 +285,17 @@ export default function Page() {
     await supabase.auth.signOut();
   };
 
+  // Delete Message Handler
+  const handleDeleteMessage = async (messageId: string) => {
+    // Optimistic local delete
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+    const { error } = await supabase.from('messages').delete().eq('id', messageId);
+    if (error) {
+      console.error('Error deleting message:', error.message);
+    }
+  };
+
   // Send Text Message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -294,7 +318,6 @@ export default function Page() {
     } else if (data && data[0]) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? data[0] : m)));
       
-      // Ensure contact is saved in list
       if (!contacts.some((c) => c.email === selectedUser.email)) {
         setContacts((prev) => [...prev, selectedUser]);
       }
@@ -661,130 +684,4 @@ export default function Page() {
                     {selectedUser.email.substring(0, 2).toUpperCase()}
                   </div>
                   {onlineUsers.has(selectedUser.email) ? (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-black rounded-full flex items-center justify-center">
-                      <Check className="w-2 h-2 text-black stroke-[3]" />
-                    </span>
-                  ) : (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-zinc-700 border-2 border-black rounded-full" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="font-semibold text-blue-400">{selectedUser.email}</h2>
-                  <p className="text-xs text-gray-500">
-                    {onlineUsers.has(selectedUser.email) ? 'Online' : 'Offline'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Messages Stream */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-2">
-                  <UserIcon className="w-10 h-10 text-zinc-800" />
-                  <p className="text-sm">No messages yet with {selectedUser.email}. Say hello!</p>
-                </div>
-              ) : (
-                messages.map((msg) => {
-                  const isMe = msg.sender_id === user.email || msg.sender_id === user.id;
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-xs md:max-w-md p-3 rounded-xl ${
-                          isMe
-                            ? 'bg-blue-600 text-white rounded-br-none'
-                            : 'bg-zinc-900 text-gray-200 rounded-bl-none border border-zinc-800'
-                        }`}
-                      >
-                        {msg.image_url && (
-                          <img
-                            src={msg.image_url}
-                            alt="Attachment"
-                            className="rounded-lg mb-2 max-h-60 object-cover"
-                          />
-                        )}
-                        {msg.audio_url && (
-                          <div className="flex items-center space-x-2 my-1">
-                            <Volume2 className="w-5 h-5 text-blue-300" />
-                            <audio controls src={msg.audio_url} className="w-full max-w-[200px]" />
-                          </div>
-                        )}
-                        <p className="text-sm">{msg.content}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input Bar */}
-            <form
-              onSubmit={handleSendMessage}
-              className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0"
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                className="hidden"
-                accept="image/*"
-              />
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
-              >
-                <ImageIcon className="w-5 h-5" />
-              </button>
-
-              {/* Voice Note Button */}
-              {isRecording ? (
-                <button
-                  type="button"
-                  onClick={stopRecording}
-                  className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition animate-pulse flex items-center space-x-1"
-                >
-                  <Square className="w-5 h-5" />
-                  <span className="text-xs font-semibold pr-1">Recording...</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
-                  title="Record Voice Note"
-                >
-                  <Mic className="w-5 h-5" />
-                </button>
-              )}
-
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={`Message ${selectedUser.email}...`}
-                className="flex-1 bg-zinc-900 text-white px-4 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500 text-sm"
-              />
-              <button
-                type="submit"
-                className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shrink-0"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-2">
-            <UserIcon className="w-12 h-12 text-zinc-800" />
-            <p className="text-sm">Search your friend's email on the left to start chatting!</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-black rounded

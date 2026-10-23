@@ -1,57 +1,43 @@
-# ChatWave — Private Messaging
+# Chatbeep 💬
 
-A responsive Next.js frontend with a Supabase backend integration. It opens in demo mode if Supabase environment variables are not configured. Demo messages are local to the current browser session and are not delivered to other users.
+A modern, fast, real-time messaging application built with **Next.js** and **Supabase**, featuring an **Electric Blue & Pitch-Black** high-contrast UI.
 
-## Requirements
+![Chatbeep](https://img.shields.io/badge/Status-Live-brightgreen)
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.0-06B6D4)
+![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E)
 
-- Node.js 18.17+ (Node 20 LTS recommended)
-- A Supabase project for real accounts and messaging
+---
 
-## Run the frontend
+## 🌟 Live Demo
 
-1. Extract this ZIP.
-2. Open a terminal in the project directory.
-3. Run `npm install`.
-4. Copy `.env.local.example` to `.env.local`.
-5. For preview mode, leave the example values as-is. For real messaging, replace them with your Supabase Project URL and publishable/anon key.
-6. Run `npm run dev`.
-7. Open `http://localhost:3000`.
+- **Live Site:** [https://chatwave-private-messaging.onrender.com](https://chatwave-private-messaging.onrender.com)
 
-## Connect the real backend
+---
 
-1. Create a project at https://supabase.com/.
-2. In the Supabase dashboard, open **SQL Editor**.
-3. Run the complete contents of `supabase/schema.sql`.
-4. In **Project Settings → API** (or **Connect**), copy the Project URL and publishable/anon key into `.env.local`.
-5. In **Authentication → URL Configuration**, add your local URL (`http://localhost:3000`) and the production URL once deployed. Configure email confirmation and password policies to your requirements.
-6. Restart the Next.js development server after editing `.env.local`.
-7. Sign up two separate test accounts in separate browser profiles. Each account gets a profile record automatically.
-8. Find the other user's username using the People search / New conversation (`+`) box, then start a conversation. Messages should arrive through Supabase Realtime.
+## ✨ Features
 
-New accounts receive a username based on their name/email plus a short suffix, such as `maya_12ab34`. For the first test, use the username shown in the `profiles` table in Supabase. Keep usernames unique.
+- ⚡ **Real-Time Chat:** Instant messaging powered by Supabase Realtime Postgres channels.
+- 🎨 **Electric Blue Theme:** Custom dark-mode aesthetic with high-contrast electric blue accents.
+- 🔐 **User Authentication:** Sign up and log in securely with Supabase Auth.
+- 👥 **Interactive Demo Profiles:** Test out real-time UI messaging immediately using built-in demo contacts.
+- 🔍 **Search & Discovery:** Filter through users and active conversations effortlessly.
+- 📱 **Responsive Design:** Optimized layout for seamless desktop and mobile experiences.
 
-## Deploy
+---
 
-Deploy the project to Vercel or another Node-compatible host:
-1. Push the project to a private Git repository.
-2. Import the repository into Vercel.
-3. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to project environment variables.
-4. Deploy and add your production domain to Supabase Auth URL configuration.
+## 🛠️ Tech Stack
 
-## Security notes
+- **Frontend:** [Next.js](https://nextjs.org/) (App Router), React, Tailwind CSS, Lucide Icons
+- **Backend & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Auth, Realtime Subscriptions)
+- **Deployment:** [Render](https://render.com/)
 
-- Never put a Supabase `service_role` key in a browser/client environment.
-- The SQL enables Row Level Security on the message/conversation tables. Review policies carefully before production use.
-- The sample profile policy allows signed-in users to search/view profiles. If your app needs more privacy, restrict profile fields and add contact/request rules.
-- This starter does **not** implement end-to-end encryption, read receipts, typing indicators, file uploads, spam controls, blocking, reporting, or rate limiting.
-- The direct-conversation RPC is idempotent for ordinary use, but if you need robust high-concurrency creation, add a dedicated uniqueness strategy/transactional locking.
-- Before public launch, test with two accounts and verify that one account cannot read another conversation by querying the Supabase API directly.
-- Consider adding email verification, abuse reporting, rate limiting, backups, monitoring, and a privacy policy before production.
+---
 
-## Stack
+## ⚙️ Environment Variables
 
-- Next.js + React + TypeScript
-- Supabase Auth
-- Supabase Postgres + Row Level Security
-- Supabase Realtime
-- Lucide icons
+To run this project locally or deploy it on your own server, set up the following environment variables:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key

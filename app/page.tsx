@@ -8,10 +8,7 @@ import {
   Heart, Ban, Eraser, MoreVertical
 } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 interface Message { id: string; sender_id: string; recipient_id: string; content: string; image_url?: string; audio_url?: string; created_at: string; }
 interface Contact { id: string; email: string; isPinned?: boolean; isMuted?: boolean; isArchived?: boolean; isFavorite?: boolean; isBlocked?: boolean; }
@@ -28,25 +25,20 @@ function VoiceMessagePlayer({ audioUrl }: { audioUrl: string }) {
     else { audioRef.current.play(); setIsPlaying(true); }
   };
 
-  const formatTime = (time: number) => {
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
+  const formatTime = (t: number) => `${Math.floor(t / 60)}:${Math.floor(t % 60) < 10 ? '0' : ''}${Math.floor(t % 60)}`;
 
   return (
     <div className="flex items-center space-x-3 my-1 bg-black/30 p-2.5 rounded-lg w-64 border border-white/10">
       <audio ref={audioRef} src={audioUrl} onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)} onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)} onEnded={() => { setIsPlaying(false); setCurrentTime(0); }} preload="metadata" />
-      <button type="button" onClick={togglePlay} className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-400 text-white flex items-center justify-center shrink-0 transition shadow-md">
+      <button type="button" onClick={togglePlay} className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0">
         {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
       </button>
       <div className="flex-1 flex flex-col">
         <div className="h-1.5 w-full bg-zinc-700 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-400 transition-all" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+          <div className="h-full bg-blue-400" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
         </div>
         <div className="flex justify-between text-[10px] text-gray-300 mt-1 font-mono">
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration || 0)}</span>
+          <span>{formatTime(currentTime)}</span><span>{formatTime(duration || 0)}</span>
         </div>
       </div>
     </div>
@@ -63,7 +55,7 @@ export default function Page() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [statusMessage, setStatusMessage] = useState('Hey there! I am using Chatbeep.');
+  const [statusMessage, setStatusMessage] = useState('Hey there! Using Chatbeep.');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -94,9 +86,9 @@ export default function Page() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
-    const handleOutsideClick = () => { setOpenMenuContactId(null); setShowChatHeaderMenu(false); };
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
+    const handleOutside = () => { setOpenMenuContactId(null); setShowChatHeaderMenu(false); };
+    window.addEventListener('click', handleOutside);
+    return () => window.removeEventListener('click', handleOutside);
   }, []);
 
   useEffect(() => {
@@ -105,7 +97,7 @@ export default function Page() {
       if (session?.user?.email) setDisplayName(session.user.email.split('@')[0]);
       setLoadingSession(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
       if (session?.user?.email) setDisplayName(session.user.email.split('@')[0]);
       setLoadingSession(false);
@@ -163,9 +155,7 @@ export default function Page() {
   const handleAddContact = () => {
     if (!searchQuery.trim()) return;
     const newContact = { id: searchQuery.trim(), email: searchQuery.trim() };
-    if (!contacts.some((c) => c.email.toLowerCase() === newContact.email.toLowerCase())) {
-      setContacts((prev) => [...prev, newContact]);
-    }
+    if (!contacts.some((c) => c.email.toLowerCase() === newContact.email.toLowerCase())) setContacts((prev) => [...prev, newContact]);
     setSelectedUser(newContact);
     setSearchQuery('');
   };
@@ -208,5 +198,29 @@ export default function Page() {
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newMessage.trim() || !user || !selectedUser || selectedUser.isBlocked) return;
+    const msg = { sender_id: user.email || user.id, recipient_id: selectedUser.email, content: newMessage, created_at: new Date().toISOString() };
+    const tempId = Math.random().toString();
+    setMessages((prev) => [...prev, { ...msg, id: tempId }]);
+    setNewMessage('');
+    const { data } = await supabase.from('messages').insert([msg]).select();
+    if (data && data[0]) {
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? data[0] : m)));
+      if (!contacts.some((c) => c.email === selectedUser.email)) setContacts((prev) => [...prev, selectedUser]);
+    }
+  };
 
-    const msg = { sender_id: user.email || user.id, recipient_id: selectedUser.email, content: newMessage, created_at: new Date
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !user || !selectedUser) return;
+    setUploading(true);
+    const file = e.target.files[0];
+    const filePath = `images/${Math.random()}.${file.name.split('.').pop()}`;
+    await supabase.storage.from('chat-attachments').upload(filePath, file);
+    const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
+    await supabase.from('messages').insert([{ sender_id: user.email || user.id, recipient_id: selectedUser.email, content: '📷 Image', image_url: data.publicUrl, created_at: new Date().toISOString() }]);
+    setUploading(false);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;

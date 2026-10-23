@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient, User } from '@supabase/supabase-js';
-import { Send, Image, Trash2, Edit2, Check, LogOut, Search, User as UserIcon } from 'lucide-react';
+import { Send, Image as ImageIcon, LogOut, Search, User as UserIcon } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -24,7 +24,6 @@ export default function Page() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'chat' | 'users'>('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<string>('demo-contact');
 
@@ -35,12 +34,23 @@ export default function Page() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Set browser title
+  // Set browser title dynamically
   useEffect(() => {
     document.title = 'Chatbeep';
   }, []);
 
-  // Check auth session
+  // Safely check notification permission without throwing errors on untrusted origins
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch (e) {
+      // Ignore notification errors in restrictive browser environments
+    }
+  }, []);
+
+  // Check auth session across browsers
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -53,7 +63,7 @@ export default function Page() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime Presence
+  // Realtime Presence Sync
   useEffect(() => {
     if (!user) return;
 
@@ -77,7 +87,7 @@ export default function Page() {
     };
   }, [user]);
 
-  // Handle Auth
+  // Handle Authentication
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -143,24 +153,24 @@ export default function Page() {
       setMessages((prev) => [...prev, { ...msg, id: Math.random().toString() }]);
       await supabase.from('messages').insert([msg]);
     } catch (err: any) {
-      console.error('Upload error:', err.message);
+      console.error('Upload error:', err?.message || err);
     } finally {
       setUploading(false);
     }
   };
 
-  // 1. Auth View (If not logged in)
+  // 1. Auth View (Sign In / Sign Up)
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-white p-4">
+      <div className="flex items-center justify-center min-h-screen min-h-[100dvh] bg-black text-white p-4">
         <div className="w-full max-w-md bg-zinc-950 p-6 rounded-xl border border-blue-900/50 shadow-2xl">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg">
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg text-white">
               CB
             </div>
             <div>
               <h1 className="text-2xl font-bold text-blue-400">Chatbeep</h1>
-              <p className="text-xs text-gray-400">Real-time Messaging Platform</p>
+              <p className="text-xs text-gray-400">Cross-Browser Messaging Platform</p>
             </div>
           </div>
 
@@ -172,7 +182,7 @@ export default function Page() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm"
                 placeholder="you@example.com"
               />
             </div>
@@ -183,7 +193,7 @@ export default function Page() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm"
                 placeholder="••••••••"
               />
             </div>
@@ -213,15 +223,15 @@ export default function Page() {
     );
   }
 
-  // 2. Logged In Main Application View
+  // 2. Main Application View
   return (
-    <div className="flex h-screen bg-black text-white">
+    <div className="flex h-screen h-[100dvh] bg-black text-white overflow-hidden">
       {/* Sidebar: Navigation & User Discovery */}
-      <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col">
+      <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col shrink-0">
         {/* Header */}
         <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm text-white">
               CB
             </div>
             <span className="font-bold text-blue-400 text-lg">Chatbeep</span>
@@ -266,7 +276,7 @@ export default function Page() {
                     : 'hover:bg-zinc-900 text-gray-400'
                 }`}
               >
-                <div className="relative">
+                <div className="relative shrink-0">
                   <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
                     <UserIcon className="w-4 h-4 text-blue-400" />
                   </div>
@@ -287,19 +297,19 @@ export default function Page() {
         </div>
 
         {/* Current User Info */}
-        <div className="p-3 border-t border-zinc-900 bg-zinc-900/50 flex items-center space-x-2">
+        <div className="p-3 border-t border-zinc-900 bg-zinc-900/50 flex items-center space-x-2 shrink-0">
           <div className="w-2 h-2 rounded-full bg-green-500" />
           <p className="text-xs text-gray-400 truncate">Logged in: <span className="text-white">{user.email}</span></p>
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-black">
+      <div className="flex-1 flex flex-col bg-black overflow-hidden">
         {/* Top Header */}
-        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-950">
+        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-950 shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold">
+            <div className="relative shrink-0">
+              <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white">
                 {selectedUser.substring(0, 2).toUpperCase()}
               </div>
               <span
@@ -355,7 +365,7 @@ export default function Page() {
         </div>
 
         {/* Message Input Controls */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950">
+        <form onSubmit={handleSendMessage} className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0">
           <input
             type="file"
             ref={fileInputRef}
@@ -367,9 +377,9 @@ export default function Page() {
             type="button"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition"
+            className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
           >
-            <Image className="w-5 h-5" />
+            <ImageIcon className="w-5 h-5" />
           </button>
           <input
             type="text"
@@ -380,7 +390,7 @@ export default function Page() {
           />
           <button
             type="submit"
-            className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition"
+            className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shrink-0"
           >
             <Send className="w-5 h-5" />
           </button>

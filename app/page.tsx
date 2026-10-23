@@ -1,12 +1,7 @@
 'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient, User } from '@supabase/supabase-js';
-import {
-  Send, Image as ImageIcon, LogOut, Search, User as UserIcon, Plus, Mic, Square,
-  Settings, X, Play, Pause, Check, Trash2, ChevronDown, Archive, VolumeX, Pin,
-  Heart, Ban, Eraser, MoreVertical
-} from 'lucide-react';
+import { Send, Image as ImageIcon, LogOut, Search, User as UserIcon, Plus, Mic, Square, Settings, X, Play, Pause, Check, Trash2, ChevronDown, Archive, VolumeX, Pin, Heart, Ban, Eraser, MoreVertical } from 'lucide-react';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
@@ -52,11 +47,9 @@ export default function Page() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
   const [loadingSession, setLoadingSession] = useState(true);
-
   const [showSettings, setShowSettings] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [statusMessage, setStatusMessage] = useState('Hey there! Using Chatbeep.');
-
+  const [statusMessage, setStatusMessage] = useState('Using Chatbeep.');
   const [searchQuery, setSearchQuery] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
@@ -64,27 +57,19 @@ export default function Page() {
   const [viewArchived, setViewArchived] = useState(false);
   const [showChatHeaderMenu, setShowChatHeaderMenu] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    document.title = 'Chatbeep';
-    if (typeof window !== 'undefined' && 'Notification' in window) Notification.requestPermission();
-  }, []);
-
+  useEffect(() => { document.title = 'Chatbeep'; }, []);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
   useEffect(() => {
     const handleOutside = () => { setOpenMenuContactId(null); setShowChatHeaderMenu(false); };
     window.addEventListener('click', handleOutside);
@@ -132,11 +117,9 @@ export default function Page() {
     if (!user || !selectedUser) return;
     const myId = user.email || user.id;
     const otherId = selectedUser.email;
-
     supabase.from('messages').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: true }).then(({ data }) => {
       if (data) setMessages(data.filter((m) => (m.sender_id === myId && m.recipient_id === otherId) || (m.sender_id === otherId && m.recipient_id === myId)));
     });
-
     const channel = supabase.channel(`public:messages:${myId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const msg = payload.new as Message;
@@ -148,7 +131,6 @@ export default function Page() {
         setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [user, selectedUser]);
 
@@ -224,3 +206,167 @@ export default function Page() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const filePath = `voice/${Math.random()}.webm`;
+        await supabase.storage.from('chat-attachments').upload(filePath, blob);
+        const { data } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
+        if (user && selectedUser) {
+          await supabase.from('messages').insert([{ sender_id: user.email || user.id, recipient_id: selectedUser.email, content: '🎙️ Voice Note', audio_url: data.publicUrl, created_at: new Date().toISOString() }]);
+        }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch { alert('Mic access denied.'); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+  };
+
+  if (loadingSession) return <div className="flex items-center justify-center min-h-screen bg-black text-white">Loading...</div>;
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black text-white p-4">
+        <div className="w-full max-w-md bg-zinc-950 p-6 rounded-xl border border-blue-900/50">
+          <h1 className="text-2xl font-bold text-blue-400 mb-4">Chatbeep</h1>
+          <form onSubmit={handleAuth} className="space-y-4">
+            <input type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm text-white" />
+            <input type="password" required placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm text-white" />
+            {authError && <p className="text-red-400 text-xs">{authError}</p>}
+            <button type="submit" className="w-full bg-blue-600 py-2 rounded text-white font-semibold">{authMode === 'login' ? 'Sign In' : 'Sign Up'}</button>
+          </form>
+          <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="mt-4 text-xs text-blue-400">{authMode === 'login' ? 'Create account' : 'Have an account? Sign in'}</button>
+        </div>
+      </div>
+    );
+  }
+
+  const archivedCount = contacts.filter((c) => c.isArchived).length;
+  const sortedContacts = contacts.filter((c) => (viewArchived ? c.isArchived : !c.isArchived)).filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+
+  return (
+    <div className="flex h-screen bg-black text-white overflow-hidden relative">
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <button onClick={() => setPreviewImage(null)} className="absolute top-4 right-4 p-2 bg-zinc-800 text-white rounded-full"><X className="w-6 h-6" /></button>
+          <img src={previewImage} alt="Expanded View" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+        </div>
+      )}
+
+      {showSettings && (
+        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-md relative">
+            <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-400"><X className="w-5 h-5" /></button>
+            <h2 className="text-xl font-bold text-blue-400 mb-4">Settings</h2>
+            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-3" placeholder="Display Name" />
+            <input type="text" value={statusMessage} onChange={(e) => setStatusMessage(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white" placeholder="Status" />
+          </div>
+        </div>
+      )}
+
+      <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col">
+        <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">
+          <span className="font-bold text-blue-400">Chatbeep</span>
+          <div className="flex space-x-1">
+            <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-400"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => supabase.auth.signOut()} className="p-2 text-gray-400 hover:text-red-400"><LogOut className="w-5 h-5" /></button>
+          </div>
+        </div>
+
+        <div className="p-3 border-b border-zinc-900 flex space-x-2">
+          <input type="text" placeholder="Search email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddContact()} className="w-full bg-zinc-900 text-xs rounded px-3 py-2 border border-zinc-800 text-white" />
+          {searchQuery.trim() && <button onClick={handleAddContact} className="bg-blue-600 px-3 rounded"><Plus className="w-4 h-4" /></button>}
+        </div>
+
+        <div className="p-2 border-b border-zinc-900 flex justify-between">
+          <button onClick={() => setViewArchived(false)} className={`flex-1 py-1 rounded text-xs font-semibold ${!viewArchived ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Chats</button>
+          <button onClick={() => setViewArchived(true)} className={`flex-1 py-1 rounded text-xs font-semibold ${viewArchived ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Archived ({archivedCount})</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {sortedContacts.map((c) => (
+            <div key={c.email} className="relative group">
+              <button onClick={() => setSelectedUser(c)} className={`w-full flex items-center justify-between p-2 rounded-xl text-left ${selectedUser?.email === c.email ? 'bg-blue-600/20 border border-blue-500/40' : 'hover:bg-zinc-900'}`}>
+                <div className="truncate flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-blue-400 font-bold">{c.email[0].toUpperCase()}</div>
+                  <span className="text-xs truncate">{c.email}</span>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setOpenMenuContactId(openMenuContactId === c.email ? null : c.email); }} className="opacity-0 group-hover:opacity-100 p-1"><ChevronDown className="w-4 h-4" /></button>
+              </button>
+              {openMenuContactId === c.email && (
+                <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-10 w-44 bg-zinc-900 border border-zinc-800 rounded shadow-xl z-50 py-1 text-xs">
+                  <button onClick={() => { toggleContactProperty(c.email, 'isArchived'); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left hover:bg-zinc-800">{c.isArchived ? 'Unarchive' : 'Archive'}</button>
+                  <button onClick={() => { toggleContactProperty(c.email, 'isPinned'); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left hover:bg-zinc-800">{c.isPinned ? 'Unpin' : 'Pin'}</button>
+                  <button onClick={() => { handleDeleteChat(c.email); setOpenMenuContactId(null); }} className="w-full px-3 py-2 text-left text-red-400 hover:bg-zinc-800">Delete</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col bg-black overflow-hidden">
+        {selectedUser ? (
+          <>
+            <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-950 relative">
+              <span className="font-semibold text-blue-400">{selectedUser.email}</span>
+              <div className="relative">
+                <button onClick={(e) => { e.stopPropagation(); setShowChatHeaderMenu(!showChatHeaderMenu); }} className="p-2 text-gray-400 hover:text-white"><MoreVertical className="w-5 h-5" /></button>
+                {showChatHeaderMenu && (
+                  <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-10 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-xl z-50 py-1 text-xs">
+                    <button onClick={() => { toggleContactProperty(selectedUser.email, 'isMuted'); setShowChatHeaderMenu(false); }} className="w-full px-4 py-2 text-left hover:bg-zinc-800">Mute notifications</button>
+                    <button onClick={() => { handleDeleteChat(selectedUser.email); setShowChatHeaderMenu(false); }} className="w-full px-4 py-2 text-left text-red-400 hover:bg-zinc-800">Delete chat</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.map((m) => {
+                const isMe = m.sender_id === user.email || m.sender_id === user.id;
+                return (
+                  <div key={m.id} className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div className="flex items-center space-x-2">
+                      {isMe && <button onClick={() => handleDeleteMessage(m.id)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
+                      <div className={`p-3 rounded-xl max-w-md text-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-zinc-900 border border-zinc-800 text-gray-200 rounded-bl-none'}`}>
+                        {m.image_url && <img src={m.image_url} alt="img" onClick={() => setPreviewImage(m.image_url || null)} className="rounded mb-2 max-h-48 object-cover cursor-pointer hover:opacity-90" />}
+                        {m.audio_url && <VoiceMessagePlayer audioUrl={m.audio_url} />}
+                        <p>{m.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950">
+              <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="text-blue-400 p-2"><ImageIcon className="w-5 h-5" /></button>
+              {isRecording ? (
+                <button type="button" onClick={stopRecording} className="bg-red-600 p-2 rounded text-white text-xs animate-pulse">Stop Recording</button>
+              ) : (
+                <button type="button" onClick={startRecording} className="text-blue-400 p-2"><Mic className="w-5 h-5" /></button>
+              )}
+              <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-zinc-900 text-white px-3 py-2 rounded text-sm border border-zinc-800 focus:outline-none" />
+              <button type="submit" className="bg-blue-600 p-2 rounded text-white"><Send className="w-5 h-5" /></button>
+            </form>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500 text-sm">Select a chat to start messaging</div>
+        )}
+      </div>
+    </div>
+  );
+}

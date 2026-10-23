@@ -15,7 +15,15 @@ import {
   X,
   Volume2,
   Check,
-  Trash2
+  Trash2,
+  ChevronDown,
+  Archive,
+  VolumeX,
+  Pin,
+  Mail,
+  Heart,
+  Ban,
+  Eraser
 } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -35,6 +43,12 @@ interface Message {
 interface Contact {
   id: string;
   email: string;
+  isPinned?: boolean;
+  isMuted?: boolean;
+  isArchived?: boolean;
+  isFavorite?: boolean;
+  isUnread?: boolean;
+  isBlocked?: boolean;
 }
 
 export default function Page() {
@@ -54,6 +68,7 @@ export default function Page() {
   const [searchQuery, setSearchQuery] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
+  const [openMenuContactId, setOpenMenuContactId] = useState<string | null>(null);
 
   // Chat & Messaging
   const [messages, setMessages] = useState<Message[]>([]);
@@ -80,6 +95,13 @@ export default function Page() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuContactId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Persistent Session Handler
   useEffect(() => {
@@ -227,7 +249,7 @@ export default function Page() {
               return [...prev, newMsg];
             });
 
-            if (newMsg.sender_id === otherId) {
+            if (newMsg.sender_id === otherId && !selectedUser.isMuted) {
               notifyUser(otherId, newMsg.content);
             }
           }
@@ -267,6 +289,34 @@ export default function Page() {
     setSearchQuery('');
   };
 
+  // Context Menu Actions
+  const toggleContactProperty = (email: string, property: keyof Contact) => {
+    setContacts((prev) =>
+      prev.map((c) => (c.email === email ? { ...c, [property]: !c[property] } : c))
+    );
+  };
+
+  const handleClearChat = async (targetEmail: string) => {
+    if (!user) return;
+    const myId = user.email || user.id;
+
+    setMessages([]);
+    await supabase
+      .from('messages')
+      .delete()
+      .or(
+        `and(sender_id.eq.${myId},recipient_id.eq.${targetEmail}),and(sender_id.eq.${targetEmail},recipient_id.eq.${myId})`
+      );
+  };
+
+  const handleDeleteChat = async (targetEmail: string) => {
+    await handleClearChat(targetEmail);
+    setContacts((prev) => prev.filter((c) => c.email !== targetEmail));
+    if (selectedUser?.email === targetEmail) {
+      setSelectedUser(null);
+    }
+  };
+
   // Auth Operations
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,21 +335,16 @@ export default function Page() {
     await supabase.auth.signOut();
   };
 
-  // Delete Message Handler
+  // Delete Single Message
   const handleDeleteMessage = async (messageId: string) => {
-    // Optimistic local delete
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
-
-    const { error } = await supabase.from('messages').delete().eq('id', messageId);
-    if (error) {
-      console.error('Error deleting message:', error.message);
-    }
+    await supabase.from('messages').delete().eq('id', messageId);
   };
 
   // Send Text Message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newMessage.trim() || !user || !selectedUser) return;
+    if (!newMessage.trim() || !user || !selectedUser || selectedUser.isBlocked) return;
 
     const msg = {
       sender_id: user.email || user.id,
@@ -317,7 +362,7 @@ export default function Page() {
       console.error('Error sending message:', error.message);
     } else if (data && data[0]) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? data[0] : m)));
-      
+
       if (!contacts.some((c) => c.email === selectedUser.email)) {
         setContacts((prev) => [...prev, selectedUser]);
       }
@@ -427,7 +472,7 @@ export default function Page() {
     );
   }
 
-  // 1. Auth View
+  // Auth View
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen min-h-[100dvh] bg-black text-white p-4">
@@ -491,13 +536,15 @@ export default function Page() {
     );
   }
 
-  const filteredContacts = contacts.filter((c) =>
-    c.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Sort contacts: Pinned contacts first
+  const sortedContacts = [...contacts]
+    .filter((c) => !c.isArchived)
+    .filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
   return (
     <div className="flex h-screen h-[100dvh] bg-black text-white overflow-hidden relative">
-      {/* Settings & Profile Modal */}
+      {/* Profile & Settings Modal */}
       {showSettings && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-md relative">
@@ -552,7 +599,7 @@ export default function Page() {
 
       {/* Sidebar */}
       <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col shrink-0">
-        {/* Sidebar Header & Profile Settings */}
+        {/* Sidebar Header */}
         <div className="p-4 border-b border-blue-900/40 flex items-center justify-between bg-zinc-900/30">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm text-white">
@@ -602,13 +649,13 @@ export default function Page() {
           )}
         </div>
 
-        {/* Saved Conversations List */}
+        {/* Saved Conversations List with Context Dropdown */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           <p className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
             Conversations
           </p>
 
-          {filteredContacts.length === 0 ? (
+          {sortedContacts.length === 0 ? (
             <div className="px-3 py-4 text-center">
               <p className="text-xs text-gray-500">No saved conversations yet.</p>
               {searchQuery.trim() && (
@@ -621,40 +668,156 @@ export default function Page() {
               )}
             </div>
           ) : (
-            filteredContacts.map((c) => {
+            sortedContacts.map((c) => {
               const isSelected = selectedUser?.email === c.email;
               const isOnline = onlineUsers.has(c.email);
               const initials = c.email.substring(0, 2).toUpperCase();
+              const isMenuOpen = openMenuContactId === c.email;
 
               return (
-                <button
-                  key={c.email}
-                  onClick={() => setSelectedUser(c)}
-                  className={`w-full flex items-center space-x-3 p-3 rounded-xl text-left transition ${
-                    isSelected
-                      ? 'bg-blue-600/20 border border-blue-500/40 text-white'
-                      : 'hover:bg-zinc-900/80 text-gray-300'
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-blue-400">
-                      {initials}
+                <div key={c.email} className="relative group">
+                  <button
+                    onClick={() => setSelectedUser(c)}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition ${
+                      isSelected
+                        ? 'bg-blue-600/20 border border-blue-500/40 text-white'
+                        : 'hover:bg-zinc-900/80 text-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3 truncate">
+                      <div className="relative shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-blue-400">
+                          {initials}
+                        </div>
+                        {isOnline ? (
+                          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-zinc-950 rounded-full flex items-center justify-center">
+                            <Check className="w-2 h-2 text-black stroke-[3]" />
+                          </span>
+                        ) : (
+                          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-zinc-700 border-2 border-zinc-950 rounded-full" />
+                        )}
+                      </div>
+                      <div className="truncate">
+                        <div className="flex items-center space-x-1">
+                          <p className="text-xs font-semibold text-white truncate">{c.email}</p>
+                          {c.isPinned && <Pin className="w-3 h-3 text-blue-400 fill-blue-400 shrink-0" />}
+                        </div>
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {isOnline ? 'Online' : 'Offline'}
+                        </p>
+                      </div>
                     </div>
-                    {isOnline ? (
-                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-zinc-950 rounded-full flex items-center justify-center">
-                        <Check className="w-2 h-2 text-black stroke-[3]" />
-                      </span>
-                    ) : (
-                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-zinc-700 border-2 border-zinc-950 rounded-full" />
-                    )}
-                  </div>
-                  <div className="flex-1 truncate">
-                    <p className="text-xs font-semibold text-white truncate">{c.email}</p>
-                    <p className="text-[10px] text-gray-400 truncate">
-                      {isOnline ? 'Online' : 'Offline'}
-                    </p>
-                  </div>
-                </button>
+
+                    {/* Context Menu Trigger Chevron */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuContactId(isMenuOpen ? null : c.email);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-white rounded transition shrink-0 ml-1"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </button>
+
+                  {/* WhatsApp-Style Popup Context Menu */}
+                  {isMenuOpen && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-2 top-10 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl z-50 py-1 text-xs text-gray-200"
+                    >
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isArchived');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left"
+                      >
+                        <Archive className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Archive chat</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isMuted');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left"
+                      >
+                        <VolumeX className="w-3.5 h-3.5 text-gray-400" />
+                        <span>{c.isMuted ? 'Unmute notifications' : 'Mute notifications'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isPinned');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left"
+                      >
+                        <Pin className="w-3.5 h-3.5 text-gray-400" />
+                        <span>{c.isPinned ? 'Unpin chat' : 'Pin chat'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isUnread');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Mark as unread</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isFavorite');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left"
+                      >
+                        <Heart className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Add to Favorites</span>
+                      </button>
+
+                      <div className="border-t border-zinc-800 my-1" />
+
+                      <button
+                        onClick={() => {
+                          toggleContactProperty(c.email, 'isBlocked');
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left text-yellow-400"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        <span>{c.isBlocked ? 'Unblock' : 'Block'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleClearChat(c.email);
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left text-red-400"
+                      >
+                        <Eraser className="w-3.5 h-3.5" />
+                        <span>Clear chat</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDeleteChat(c.email);
+                          setOpenMenuContactId(null);
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-2 hover:bg-zinc-800 text-left text-red-500 font-semibold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete chat</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })
           )}
@@ -684,4 +847,148 @@ export default function Page() {
                     {selectedUser.email.substring(0, 2).toUpperCase()}
                   </div>
                   {onlineUsers.has(selectedUser.email) ? (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-black rounded
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-black rounded-full flex items-center justify-center">
+                      <Check className="w-2 h-2 text-black stroke-[3]" />
+                    </span>
+                  ) : (
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-zinc-700 border-2 border-black rounded-full" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="font-semibold text-blue-400">{selectedUser.email}</h2>
+                  <p className="text-xs text-gray-500">
+                    {onlineUsers.has(selectedUser.email) ? 'Online' : 'Offline'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages Stream */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-2">
+                  <UserIcon className="w-10 h-10 text-zinc-800" />
+                  <p className="text-sm">No messages yet with {selectedUser.email}. Say hello!</p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isMe = msg.sender_id === user.email || msg.sender_id === user.id;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        {isMe && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            title="Delete Message"
+                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <div
+                          className={`max-w-xs md:max-w-md p-3 rounded-xl ${
+                            isMe
+                              ? 'bg-blue-600 text-white rounded-br-none'
+                              : 'bg-zinc-900 text-gray-200 rounded-bl-none border border-zinc-800'
+                          }`}
+                        >
+                          {msg.image_url && (
+                            <img
+                              src={msg.image_url}
+                              alt="Attachment"
+                              className="rounded-lg mb-2 max-h-60 object-cover"
+                            />
+                          )}
+                          {msg.audio_url && (
+                            <div className="flex items-center space-x-2 my-1">
+                              <Volume2 className="w-5 h-5 text-blue-300" />
+                              <audio controls src={msg.audio_url} className="w-full max-w-[200px]" />
+                            </div>
+                          )}
+                          <p className="text-sm">{msg.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Bar */}
+            <form
+              onSubmit={handleSendMessage}
+              className="p-4 border-t border-blue-900/40 flex items-center space-x-2 bg-zinc-950 shrink-0"
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                className="hidden"
+                accept="image/*"
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
+
+              {/* Voice Note Button */}
+              {isRecording ? (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition animate-pulse flex items-center space-x-1"
+                >
+                  <Square className="w-5 h-5" />
+                  <span className="text-xs font-semibold pr-1">Recording...</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="p-2 text-blue-400 hover:text-blue-300 hover:bg-zinc-900 rounded-lg transition shrink-0"
+                  title="Record Voice Note"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+              )}
+
+              <input
+                type="text"
+                disabled={selectedUser.isBlocked}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder={
+                  selectedUser.isBlocked
+                    ? 'This user is blocked'
+                    : `Message ${selectedUser.email}...`
+                }
+                className="flex-1 bg-zinc-900 text-white px-4 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500 text-sm disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={selectedUser.isBlocked}
+                className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shrink-0 disabled:opacity-50"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-2">
+            <UserIcon className="w-12 h-12 text-zinc-800" />
+            <p className="text-sm">Search your friend's email on the left to start chatting!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

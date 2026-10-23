@@ -276,7 +276,7 @@ export default function Home() {
           <div className="flex items-center justify-center gap-2 mb-6">
             <MessageCircle className="w-8 h-8 text-indigo-500" />
             <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-              ChatWave
+              Chatbeep
             </h1>
           </div>
 
@@ -374,7 +374,7 @@ export default function Home() {
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-6 h-6 text-indigo-500" />
-            <span className="font-bold text-lg text-slate-100">ChatWave</span>
+            <span className="font-bold text-lg text-slate-100">Chatbeep</span>
           </div>
           <button
             onClick={() => supabase?.auth.signOut()}

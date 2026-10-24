@@ -356,15 +356,23 @@ export default function Page() {
                       {isMe && <button onClick={() => handleDeleteMessage(m.id)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
                       <div className={`p-3 rounded-xl max-w-md text-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-zinc-900 border border-zinc-800 text-gray-200 rounded-bl-none'}`}>
                         {m.image_url && (
-  <div className="relative mt-2">
-    <img src={m.image_url} alt="chat image" className="max-w-xs rounded-lg" />
-    <button 
-onClick={() => {
-  if (m.image_url) handleDownloadImage(m.image_url);
-}}    >
-      📥 Download
-    </button>
-  </div>
+<div className="relative mt-2">
+  <img
+    src={m.image_url}
+    alt="chat image"
+    className="max-w-xs rounded-lg cursor-pointer hover:opacity-90 transition"
+    onClick={() => setPreviewImage(m.image_url!)}
+  />
+  <button
+    onClick={() => {
+      if (m.image_url) handleDownloadImage(m.image_url);
+    }}
+    className="absolute bottom-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-black/80 transition"
+    title="Download Image"
+  >
+    Download
+  </button>
+</div>
 )}
                         {m.audio_url && <VoiceMessagePlayer audioUrl={m.audio_url} />}
                         <p>{m.content}</p>

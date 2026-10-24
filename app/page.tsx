@@ -269,10 +269,9 @@ export default function Page() {
 
   const archivedCount = contacts.filter((c) => c.isArchived).length;
   const sortedContacts = contacts.filter((c) => (viewArchived ? c.isArchived : !c.isArchived)).filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
-
 return (
   <div className="flex h-screen bg-black text-white overflow-hidden relative">
-    {/* Preview Modal */}
+    {/* 1. Fullscreen Preview Modal */}
     {previewImage && (
       <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <button
@@ -289,15 +288,42 @@ return (
       </div>
     )}
 
-    {/* Rest of your page content goes here */}        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-md relative">
-            <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-400"><X className="w-5 h-5" /></button>
-            <h2 className="text-xl font-bold text-blue-400 mb-4">Settings</h2>
-            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-3" placeholder="Display Name" />
-            <input type="text" value={statusMessage} onChange={(e) => setStatusMessage(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white" placeholder="Status" />
+    {/* 2. Settings Modal Overlay (nested inside the main flex container) */}
+    {showSettings && (
+      <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-lg relative">
+          <button 
+            onClick={() => setShowSettings(false)} 
+            className="absolute top-4 right-4 text-gray-400 hover:text-white"
+          >
+            ✕
+          </button>
+          <h2 className="text-xl font-bold text-blue-400 mb-4">Settings</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Display Name</label>
+              <input 
+                type="text" 
+                value={displayName} 
+                onChange={(e) => setDisplayName(e.target.value)} 
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Status Message</label>
+              <input 
+                type="text" 
+                value={statusMessage} 
+                onChange={(e) => setStatusMessage(e.target.value)} 
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-white text-sm"
+              />
+            </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
+
+    {/* 3. Rest of your chat sidebar and message list UI goes here... */}
 
       <div className="w-80 border-r border-blue-900/40 bg-zinc-950 flex flex-col">
         <div className="p-4 border-b border-blue-900/40 flex items-center justify-between">

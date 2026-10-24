@@ -401,61 +401,304 @@ export default function Page() {
         )}
       </div>
     
-  {/* Settings Modal */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 text-white rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Settings</h2>
-              <button 
-                onClick={() => setIsSettingsOpen(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold"
-              >
-                ✕
-              </button>
-            </div>
+  'use client';
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span>Notification Sounds</span>
-                <input 
-                  type="checkbox" 
-                  checked={settings.soundEnabled}
-                  onChange={(e) => setSettings({ ...settings, soundEnabled: e.target.checked })}
-                  className="w-5 h-5 accent-blue-600"
-                />
-              </div>
+import React, { useState } from 'react';
+import { 
+  X, 
+  Camera, 
+  Volume2, 
+  Shield, 
+  Folder, 
+  Keyboard, 
+  Sliders, 
+  FolderIcon, 
+  Maximize2,
+  ExternalLink 
+} from 'lucide-react';
 
-              <div className="flex items-center justify-between">
-                <span>Dark Mode</span>
-                <input 
-                  type="checkbox" 
-                  checked={settings.darkMode}
-                  onChange={(e) => setSettings({ ...settings, darkMode: e.target.checked })}
-                  className="w-5 h-5 accent-blue-600"
-                />
-              </div>
+export default function SettingsModal({ 
+  isOpen, 
+  onClose 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+}) {
+  const [activeTab, setActiveTab] = useState<'devices' | 'appearance' | 'privacy' | 'files' | 'shortcuts'>('devices');
 
-              <div className="flex items-center justify-between">
-                <span>Auto-Save Received Images</span>
-                <input 
-                  type="checkbox" 
-                  checked={settings.autoSaveImages}
-                  onChange={(e) => setSettings({ ...settings, autoSaveImages: e.target.checked })}
-                  className="w-5 h-5 accent-blue-600"
-                />
-              </div>
-            </div>
+  // State options
+  const [muteCamMic, setMuteCamMic] = useState(false);
+  const [blurBackground, setBlurBackground] = useState(false);
+  const [skipPreview, setSkipPreview] = useState(false);
+  
+  const [compactList, setCompactList] = useState(false);
+  const [chatStyle, setChatStyle] = useState<'list' | 'bubbles'>('bubbles');
+  const [playSounds, setPlaySounds] = useState(true);
 
+  const [sendReadReceipts, setSendReadReceipts] = useState(true);
+  const [shareTyping, setShareTyping] = useState(true);
+
+  if (!isOpen) return null;
+
+  const scrollToSection = (id: string) => {
+    setActiveTab(id as any);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="flex h-[85vh] w-full max-w-4xl rounded-xl bg-[#0f172a] text-gray-200 border border-gray-800 shadow-2xl overflow-hidden">
+        
+        {/* Left Sidebar */}
+        <div className="w-64 border-r border-gray-800 bg-[#0b1329] p-4 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white px-3 mb-6">App settings</h2>
+            <nav className="space-y-1">
+              {[
+                { id: 'devices', label: 'Devices' },
+                { id: 'appearance', label: 'Appearance & Sounds' },
+                { id: 'privacy', label: 'Privacy' },
+                { id: 'files', label: 'Files' },
+                { id: 'shortcuts', label: 'Keyboard shortcuts' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => scrollToSection(tab.id)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                    activeTab === tab.id
+                      ? 'bg-blue-600/20 text-blue-400 font-semibold'
+                      : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div className="px-3 text-xs text-gray-500">talk 24.0.2</div>
+        </div>
+
+        {/* Right Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+          
+          {/* Header Close Button */}
+          <div className="flex justify-end sticky top-0 bg-[#0f172a]/90 backdrop-blur pb-2 z-10">
             <button 
-              onClick={() => setIsSettingsOpen(false)}
-              className="mt-6 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              onClick={onClose}
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition"
             >
-              Save Settings
+              <X size={20} />
             </button>
           </div>
+
+          {/* Section: Devices */}
+          <section id="devices" className="space-y-4">
+            <h3 className="text-lg font-bold text-white">Devices</h3>
+            <div className="space-y-2">
+              <ToggleRow
+                label="Turn camera and microphone off by default"
+                checked={muteCamMic}
+                onChange={setMuteCamMic}
+              />
+              <ToggleRow
+                label="Blur camera background by default"
+                checked={blurBackground}
+                onChange={setBlurBackground}
+              />
+              <ToggleRow
+                label="Skip device preview before joining a call"
+                description="Camera will be turned off when joining. Always shown if recording consent is required."
+                checked={skipPreview}
+                onChange={setSkipPreview}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3.5 bg-[#182238] rounded-xl border border-gray-800">
+              <span className="text-sm font-medium text-gray-200">Microphone settings</span>
+              <Sliders size={18} className="text-gray-400 cursor-pointer hover:text-white" />
+            </div>
+
+            <button className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#182238] hover:bg-[#1f2d4a] border border-gray-700/60 rounded-xl text-sm font-medium text-gray-200 transition">
+              <Camera size={16} /> Check devices
+            </button>
+          </section>
+
+          {/* Section: Appearance & Sounds */}
+          <section id="appearance" className="space-y-4 pt-4 border-t border-gray-800/60">
+            <h3 className="text-lg font-bold text-white">Appearance & Sounds</h3>
+            <ToggleRow
+              label="Compact conversations list"
+              checked={compactList}
+              onChange={setCompactList}
+            />
+
+            <div>
+              <p className="text-sm font-medium text-gray-300 mb-3">Chat appearance</p>
+              
+              {/* Preview Box */}
+              <div className="p-4 bg-[#0a0f1d] border border-gray-800 rounded-xl mb-3 space-y-3">
+                <div className="flex gap-2 items-start">
+                  <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-300 font-bold">A</div>
+                  <div className="bg-[#1e293b] text-xs p-2.5 rounded-lg text-gray-200 max-w-xs">
+                    Hey! Are you using the list style or message bubbles?
+                    <div className="text-[10px] text-gray-400 text-right mt-1">6:13 PM</div>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <div className="bg-blue-600/80 text-xs p-2.5 rounded-lg text-white max-w-xs">
+                    I picked message bubbles
+                    <div className="text-[10px] text-blue-200 text-right mt-1">6:13 PM ✓</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Selector */}
+              <div className="grid grid-cols-2 p-1 bg-[#182238] rounded-xl border border-gray-800">
+                <button
+                  onClick={() => setChatStyle('list')}
+                  className={`py-2 text-xs font-semibold rounded-lg transition ${
+                    chatStyle === 'list' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Messages list
+                </button>
+                <button
+                  onClick={() => setChatStyle('bubbles')}
+                  className={`py-2 text-xs font-semibold rounded-lg transition ${
+                    chatStyle === 'bubbles' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Message bubbles
+                </button>
+              </div>
+            </div>
+
+            <ToggleRow
+              label="Play sounds when participants join or leave a call"
+              description="Currently not available on iPhone and iPad due to technical restrictions by the manufacturer"
+              checked={playSounds}
+              onChange={setPlaySounds}
+            />
+
+            <div className="flex items-center justify-between p-3.5 bg-[#182238] rounded-xl border border-gray-800">
+              <div>
+                <p className="text-sm font-medium text-gray-200">Notification settings</p>
+                <p className="text-xs text-gray-400">Sounds for chat and call notifications</p>
+              </div>
+              <ExternalLink size={16} className="text-gray-400 cursor-pointer hover:text-white" />
+            </div>
+          </section>
+
+          {/* Section: Privacy */}
+          <section id="privacy" className="space-y-4 pt-4 border-t border-gray-800/60">
+            <h3 className="text-lg font-bold text-white">Privacy</h3>
+            <ToggleRow
+              label="Send read receipts"
+              description="When off, all read statuses will be hidden"
+              checked={sendReadReceipts}
+              onChange={setSendReadReceipts}
+            />
+            <ToggleRow
+              label="Share typing status"
+              description="When off, all typing indicators will be hidden"
+              checked={shareTyping}
+              onChange={setShareTyping}
+            />
+          </section>
+
+          {/* Section: Files */}
+          <section id="files" className="space-y-4 pt-4 border-t border-gray-800/60">
+            <h3 className="text-lg font-bold text-white">Files</h3>
+            <div className="flex items-center justify-between p-3.5 bg-[#182238] rounded-xl border border-gray-800">
+              <div>
+                <p className="text-xs text-gray-400">Attachments folder</p>
+                <p className="text-sm font-medium text-gray-200">/Talk</p>
+              </div>
+              <FolderIcon size={18} className="text-gray-400 cursor-pointer hover:text-white" />
+            </div>
+          </section>
+
+          {/* Section: Keyboard Shortcuts */}
+          <section id="shortcuts" className="space-y-3 pt-4 border-t border-gray-800/60">
+            <h3 className="text-lg font-bold text-white">Keyboard shortcuts</h3>
+            
+            <ShortcutRow label="Toggle full screen" keyCombo="F" />
+            <ShortcutRow label="Return to Home screen" keyCombo="Escape" />
+            <ShortcutRow label="Search" keyCombo="Ctrl + F" />
+
+            <h4 className="text-xs font-semibold text-gray-400 pt-2 uppercase tracking-wider">Shortcuts while in a chat</h4>
+            <ShortcutRow label="Focus the chat input" keyCombo="C" />
+            <ShortcutRow label="Unfocus the chat input to use shortcuts" keyCombo="Escape" />
+            <ShortcutRow label="Edit your last message" keyCombo="Ctrl + ↑" />
+
+            <h4 className="text-xs font-semibold text-gray-400 pt-2 uppercase tracking-wider">Shortcuts while in a call</h4>
+            <ShortcutRow label="Camera on and off" keyCombo="V" />
+            <ShortcutRow label="Microphone on and off" keyCombo="M" />
+            <ShortcutRow label="Raise or lower hand" keyCombo="R" />
+            <ShortcutRow label="Push to talk or push to mute" keyCombo="Space" />
+            <ShortcutRow label="Zoom-in / zoom-out a screen share" keyCombo="Mouse wheel" />
+          </section>
+
         </div>
-      )}
       </div>
+    </div>
+  );
+}
+
+// Reusable Toggle Row Component
+function ToggleRow({ 
+  label, 
+  description, 
+  checked, 
+  onChange 
+}: { 
+  label: string; 
+  description?: string; 
+  checked: boolean; 
+  onChange: (val: boolean) => void; 
+}) {
+  return (
+    <div className="flex items-center justify-between p-3.5 bg-[#182238] rounded-xl border border-gray-800/80">
+      <div className="pr-4">
+        <p className="text-sm font-medium text-gray-200">{label}</p>
+        {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out ${
+          checked ? 'bg-blue-600' : 'bg-gray-700'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ease-in-out mt-0.5 ml-0.5 ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+// Reusable Keyboard Shortcut Row Component
+function ShortcutRow({ label, keyCombo }: { label: string; keyCombo: string }) {
+  const keys = keyCombo.split(' + ');
+
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-gray-800/40 text-sm">
+      <span className="text-gray-300">{label}</span>
+      <div className="flex gap-1">
+        {keys.map((k, idx) => (
+          <kbd
+            key={idx}
+            className="px-2 py-1 text-xs font-semibold text-gray-300 bg-[#1e293b] border border-gray-700 rounded-md shadow-sm"
+          >
+            {k}
+          </kbd>
+        ))}
+      </div>
+    </div>
   );
 }

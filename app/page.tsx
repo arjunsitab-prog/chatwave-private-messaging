@@ -271,7 +271,7 @@ export default function Page() {
   const sortedContacts = contacts.filter((c) => (viewArchived ? c.isArchived : !c.isArchived)).filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 return (
   <div className="flex h-screen bg-black text-white overflow-hidden relative">
-    {/* 1. Fullscreen Preview Modal */}
+{/* 1. Fullscreen Preview Modal */}
     {previewImage && (
       <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
         <button
@@ -286,8 +286,7 @@ return (
           className="max-w-full max-h-[90vh] object-contain rounded-lg"
         />
       </div>
-    )}
-
+    )}  
     {/* 2. Settings Modal Overlay (nested inside the main flex container) */}
     {showSettings && (
       <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">

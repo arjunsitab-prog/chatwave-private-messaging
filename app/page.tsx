@@ -58,6 +58,21 @@ export default function Page() {
   const [showChatHeaderMenu, setShowChatHeaderMenu] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const handleDownloadImage = (imageUrl: string, filename = 'chatbeep-image.jpg') => {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState({
+    soundEnabled: true,
+    darkMode: true,
+    autoSaveImages: false,
+  });
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
@@ -340,7 +355,18 @@ export default function Page() {
                     <div className="flex items-center space-x-2">
                       {isMe && <button onClick={() => handleDeleteMessage(m.id)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
                       <div className={`p-3 rounded-xl max-w-md text-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-zinc-900 border border-zinc-800 text-gray-200 rounded-bl-none'}`}>
-                        {m.image_url && <img src={m.image_url} alt="img" onClick={() => setPreviewImage(m.image_url || null)} className="rounded mb-2 max-h-48 object-cover cursor-pointer hover:opacity-90" />}
+                        {m.image_url && (
+  <div className="relative mt-2">
+    <img src={m.image_url} alt="chat image" className="max-w-xs rounded-lg" />
+    <button 
+      onClick={() => handleDownloadImage(m.image_url)}
+      className="absolute bottom-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-black/80 text-xs flex items-center gap-1"
+      title="Download Image"
+    >
+      📥 Download
+    </button>
+  </div>
+)}
                         {m.audio_url && <VoiceMessagePlayer audioUrl={m.audio_url} />}
                         <p>{m.content}</p>
                       </div>
@@ -368,5 +394,60 @@ export default function Page() {
         )}
       </div>
     </div>
+    {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 text-white rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Settings</h2>
+              <button 
+                onClick={() => setIsSettingsOpen(false)}
+                className="text-gray-400 hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span>Notification Sounds</span>
+                <input 
+                  type="checkbox" 
+                  checked={settings.soundEnabled}
+                  onChange={(e) => setSettings({ ...settings, soundEnabled: e.target.checked })}
+                  className="w-5 h-5 accent-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Dark Mode</span>
+                <input 
+                  type="checkbox" 
+                  checked={settings.darkMode}
+                  onChange={(e) => setSettings({ ...settings, darkMode: e.target.checked })}
+                  className="w-5 h-5 accent-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Auto-Save Received Images</span>
+                <input 
+                  type="checkbox" 
+                  checked={settings.autoSaveImages}
+                  onChange={(e) => setSettings({ ...settings, autoSaveImages: e.target.checked })}
+                  className="w-5 h-5 accent-blue-600"
+                />
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="mt-6 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+            >
+              Save Settings
+            </button>
+          </div>
+        </div>
+      )}
   );
 }

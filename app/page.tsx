@@ -359,10 +359,9 @@ export default function Page() {
   <div className="relative mt-2">
     <img src={m.image_url} alt="chat image" className="max-w-xs rounded-lg" />
     <button 
-      onClick={() => handleDownloadImage(m.image_url)}
-      className="absolute bottom-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-black/80 text-xs flex items-center gap-1"
-      title="Download Image"
-    >
+onClick={() => {
+  if (m.image_url) handleDownloadImage(m.image_url);
+}}    >
       📥 Download
     </button>
   </div>

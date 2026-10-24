@@ -271,6 +271,7 @@ export default function Page() {
   const sortedContacts = contacts.filter((c) => (viewArchived ? c.isArchived : !c.isArchived)).filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
   return (
+    <>
     <div className="flex h-screen bg-black text-white overflow-hidden relative">
       {previewImage && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
@@ -393,8 +394,8 @@ export default function Page() {
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">Select a chat to start messaging</div>
         )}
       </div>
-    </div>
-    {/* Settings Modal */}
+    
+  {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-800 text-white rounded-lg p-6 w-full max-w-md shadow-xl">
@@ -449,5 +450,6 @@ export default function Page() {
           </div>
         </div>
       )}
+      </>
   );
 }

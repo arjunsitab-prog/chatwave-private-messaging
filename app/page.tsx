@@ -270,17 +270,26 @@ export default function Page() {
   const archivedCount = contacts.filter((c) => c.isArchived).length;
   const sortedContacts = contacts.filter((c) => (viewArchived ? c.isArchived : !c.isArchived)).filter((c) => c.email.toLowerCase().includes(searchQuery.toLowerCase())).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
-  return (
-    <div className="flex h-screen bg-black text-white overflow-hidden relative">
-      {previewImage && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-          <button onClick={() => setPreviewImage(null)} className="absolute top-4 right-4 p-2 bg-zinc-800 text-white rounded-full"><X className="w-6 h-6" /></button>
-          <img src={previewImage} alt="Expanded View" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
-        </div>
-      )}
+return (
+  <div className="flex h-screen bg-black text-white overflow-hidden relative">
+    {/* Preview Modal */}
+    {previewImage && (
+      <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <button
+          onClick={() => setPreviewImage(null)}
+          className="absolute top-4 right-4 p-2 bg-zinc-800 text-white rounded-full hover:bg-zinc-700 transition"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        <img
+          src={previewImage}
+          alt="Preview"
+          className="max-w-full max-h-[90vh] object-contain rounded-lg"
+        />
+      </div>
+    )}
 
-      {showSettings && (
-        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    {/* Rest of your page content goes here */}        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-950 border border-blue-900/50 rounded-xl p-6 w-full max-w-md relative">
             <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-400"><X className="w-5 h-5" /></button>
             <h2 className="text-xl font-bold text-blue-400 mb-4">Settings</h2>
@@ -417,7 +426,7 @@ import {
   ExternalLink 
 } from 'lucide-react';
 
-export default function SettingsModal({ 
+export default function Settings({ 
   isOpen, 
   onClose 
 }: { 
